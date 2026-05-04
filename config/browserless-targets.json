@@ -1,0 +1,73 @@
+{
+  "local": {
+    "BROWSERLESS_WS_BASE": "ws://127.0.0.1:3001",
+    "BROWSERLESS_HTTP_BASE": "http://127.0.0.1:3001",
+    "BROWSERLESS_LOGIN_CONNECT_MODE": "cdp",
+    "BROWSERLESS_CDP_PATH": "/chromium",
+    "BROWSERLESS_REMOTE_PROFILE_ROOT": "./profiles",
+    "BROWSERLESS_TIMEOUT_SECONDS": "",
+    "BROWSERLESS_TIMEOUT_MS": "",
+    "LOGIN_ENABLE_PROMPT_FALLBACKS": "true",
+    "LIVE_URL_TIMEOUT_MS": ""
+  },
+  "cloud": {
+    "BROWSERLESS_WS_BASE": "wss://production-sfo.browserless.io",
+    "BROWSERLESS_HTTP_BASE": "https://production-sfo.browserless.io",
+    "BROWSERLESS_LOGIN_CONNECT_MODE": "cdp",
+    "BROWSERLESS_CDP_PATH": "",
+    "BROWSERLESS_REMOTE_PROFILE_ROOT": "/profiles",
+    "BROWSERLESS_TIMEOUT_SECONDS": "",
+    "BROWSERLESS_TIMEOUT_MS": "900000",
+    "LOGIN_ENABLE_PROMPT_FALLBACKS": "false",
+    "LIVE_URL_TIMEOUT_MS": "900000"
+  },
+  "cloud_stealth": {
+    "BROWSERLESS_WS_BASE": "wss://production-sfo.browserless.io",
+    "BROWSERLESS_HTTP_BASE": "https://production-sfo.browserless.io",
+    "BROWSERLESS_LOGIN_CONNECT_MODE": "cdp",
+    "BROWSERLESS_CDP_PATH": "/stealth",
+    "SESSION_API_STEALTH": "true",
+    "BROWSERLESS_REMOTE_PROFILE_ROOT": "/profiles",
+    "BROWSERLESS_TIMEOUT_SECONDS": "",
+    "BROWSERLESS_TIMEOUT_MS": "900000",
+    "LOGIN_ENABLE_PROMPT_FALLBACKS": "false",
+    "LIVE_URL_TIMEOUT_MS": "900000"
+  },
+  "cloud_stealth_residential_sticky": {
+    "BROWSERLESS_WS_BASE": "wss://production-sfo.browserless.io",
+    "BROWSERLESS_HTTP_BASE": "https://production-sfo.browserless.io",
+    "BROWSERLESS_LOGIN_CONNECT_MODE": "cdp",
+    "BROWSERLESS_CDP_PATH": "/stealth",
+    "SESSION_API_STEALTH": "true",
+    "BROWSERLESS_PROXY": "residential",
+    "BROWSERLESS_PROXY_COUNTRY": "us",
+    "BROWSERLESS_PROXY_STICKY": "true",
+    "BROWSERLESS_PROXY_LOCALE_MATCH": "true",
+    "BROWSERLESS_UNBLOCK_PATH": "/unblock",
+    "BROWSERLESS_UNBLOCK_PROXY": "residential",
+    "BROWSERLESS_UNBLOCK_PROXY_COUNTRY": "us",
+    "BROWSERLESS_UNBLOCK_PROXY_STICKY": "true",
+    "UNBLOCK_TTL_MS": "120000",
+    "BROWSERLESS_REMOTE_PROFILE_ROOT": "/profiles",
+    "BROWSERLESS_TIMEOUT_SECONDS": "",
+    "BROWSERLESS_TIMEOUT_MS": "900000",
+    "LOGIN_ENABLE_PROMPT_FALLBACKS": "false",
+    "LIVE_URL_TIMEOUT_MS": "900000"
+  },
+  "cloud_unblock": {
+    "BROWSERLESS_WS_BASE": "wss://production-sfo.browserless.io",
+    "BROWSERLESS_HTTP_BASE": "https://production-sfo.browserless.io",
+    "BROWSERLESS_LOGIN_CONNECT_MODE": "cdp",
+    "BROWSERLESS_CDP_PATH": "",
+    "BROWSERLESS_UNBLOCK_PATH": "/unblock",
+    "BROWSERLESS_UNBLOCK_PROXY": "",
+    "BROWSERLESS_UNBLOCK_PROXY_COUNTRY": "",
+    "BROWSERLESS_UNBLOCK_PROXY_STICKY": "",
+    "UNBLOCK_TTL_MS": "120000",
+    "BROWSERLESS_REMOTE_PROFILE_ROOT": "/profiles",
+    "BROWSERLESS_TIMEOUT_SECONDS": "",
+    "BROWSERLESS_TIMEOUT_MS": "900000",
+    "LOGIN_ENABLE_PROMPT_FALLBACKS": "false",
+    "LIVE_URL_TIMEOUT_MS": "900000"
+  }
+}

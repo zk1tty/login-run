@@ -1,0 +1,125 @@
+{
+  "version": "1.0.0",
+  "site": "healthequity",
+  "workflow": "login_extract_v1",
+  "macros": {
+    "cred": {
+      "steps": [
+        "cred.username.focus",
+        "cred.username.type",
+        "cred.username.enter",
+        "cred.password.appear",
+        "cred.password.focus",
+        "cred.password.type",
+        "cred.password.enter",
+        "cred.continue.appear_or_enabled"
+      ]
+    },
+    "otp": {
+      "steps": [
+        "otp.selection.choose",
+        "otp.code.focus",
+        "otp.code.type",
+        "otp.code.enter",
+        "otp.remember.toggle_if_present"
+      ]
+    }
+  },
+  "steps": {
+    "cred.username.focus": {
+      "handler": "focus_field",
+      "kind": "input",
+      "selectorRef": "username",
+      "retryable": true,
+      "timeoutMs": 3000
+    },
+    "cred.username.type": {
+      "handler": "type_from_payload",
+      "kind": "input",
+      "selectorRef": "username",
+      "payloadKey": "email",
+      "retryable": true,
+      "timeoutMs": 3000
+    },
+    "cred.username.enter": {
+      "handler": "press_enter",
+      "kind": "input",
+      "selectorRef": "username",
+      "retryable": true,
+      "timeoutMs": 2000
+    },
+    "cred.password.appear": {
+      "handler": "assert_actionable",
+      "kind": "check",
+      "selectorRef": "password",
+      "retryable": true,
+      "timeoutMs": 5000
+    },
+    "cred.password.focus": {
+      "handler": "focus_field",
+      "kind": "input",
+      "selectorRef": "password",
+      "retryable": true,
+      "timeoutMs": 3000
+    },
+    "cred.password.type": {
+      "handler": "type_from_payload",
+      "kind": "input",
+      "selectorRef": "password",
+      "payloadKey": "password",
+      "retryable": true,
+      "timeoutMs": 3000
+    },
+    "cred.password.enter": {
+      "handler": "press_enter",
+      "kind": "input",
+      "selectorRef": "password",
+      "retryable": true,
+      "timeoutMs": 2000
+    },
+    "cred.continue.appear_or_enabled": {
+      "handler": "assert_actionable",
+      "kind": "check",
+      "selectorRef": "continueButton",
+      "retryable": true,
+      "timeoutMs": 5000
+    },
+    "otp.selection.choose": {
+      "handler": "select_option",
+      "kind": "input",
+      "selectorRef": "selection",
+      "payloadKey": "selection",
+      "retryable": true,
+      "timeoutMs": 5000
+    },
+    "otp.code.focus": {
+      "handler": "focus_field",
+      "kind": "input",
+      "selectorRef": "confirmationCodeInput",
+      "retryable": true,
+      "timeoutMs": 3000
+    },
+    "otp.code.type": {
+      "handler": "type_from_payload",
+      "kind": "input",
+      "selectorRef": "confirmationCodeInput",
+      "payloadKey": "code",
+      "retryable": true,
+      "timeoutMs": 3000
+    },
+    "otp.code.enter": {
+      "handler": "press_enter",
+      "kind": "input",
+      "selectorRef": "confirmationCodeInput",
+      "retryable": true,
+      "timeoutMs": 2000
+    },
+    "otp.remember.toggle_if_present": {
+      "handler": "toggle_if_present",
+      "kind": "input",
+      "selectorRef": "rememberDevice",
+      "retryable": true,
+      "timeoutMs": 3000
+    }
+  }
+}

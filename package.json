@@ -1,0 +1,32 @@
+{
+  "name": "browserless-sandbox",
+  "version": "1.0.0",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "connect:cdp": "node scripts/run/local-browserless/any-url/connect-cdp.js",
+    "connect:unblock": "node scripts/run/session-api/any-url/connect-unblock.js",
+    "session:reuse:check": "node scripts/run/local-browserless/any-url/session-reuse-check.js",
+    "live:url": "node scripts/run/local-browserless/any-url/live-url.js",
+    "watch": "node scripts/run/local-browserless/any-url/watch-session.js",
+    "watch:session": "node scripts/run/local-browserless/any-url/watch-session.js",
+    "auth1": "bash scripts/run/session-api/hsa-workflow/phase1-auth.sh",
+    "auth2": "bash scripts/run/session-api/hsa-workflow/phase2-auth.sh",
+    "study:run": "node scripts/run/session-api/any-url/challenge-study.js",
+    "study:report": "node scripts/run/session-api/any-url/challenge-study-report.js",
+    "trace:ws": "node scripts/run/session-api/any-url/ws-health-check.js",
+    "legacy:login:agentql:reuse-live": "node scripts/legacy/agentql/login-agentql-reuse-live-session.js",
+    "login:agentql:reuse-live": "node scripts/legacy/agentql/login-agentql-reuse-live-session.js",
+    "start:bl-server": "node src/server.js",
+    "dev:bl-server": "node --watch src/server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "agentql": "1.13.0",
+    "cheerio": "^1.2.0",
+    "dotenv": "^17.2.3",
+    "fastify": "^5.8.5",
+    "playwright-core": "^1.58.1",
+    "puppeteer-core": "^24.9.0"
+  }
+}
