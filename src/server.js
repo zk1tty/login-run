@@ -2,8 +2,8 @@ const { buildApp } = require('./app');
 
 async function start() {
   const app = buildApp();
-  const port = Number(process.env.LIVE_ALIAS_PORT || 8787);
-  const host = process.env.LIVE_ALIAS_HOST || '0.0.0.0';
+  const port = Number(process.env.PUPPETEER_API_PORT || 8787);
+  const host = process.env.PUPPETEER_API_HOST || '0.0.0.0';
 
   try {
     await app.listen({

@@ -1,9 +1,7 @@
 const Fastify = require('fastify');
 
-const { installErrorHandler } = require('./plugins/error-handler');
-const adminOwnerRoutes = require('./routes/admin-owner-routes');
-const liveAliasRoutes = require('./routes/live-alias-routes');
-const { createLiveSessionOrchestrator } = require('./core/orchestrator/live-session-orchestrator');
+const loginRoutes = require('./routes/login-routes');
+const { createLoginRunService } = require('./core/login-agent/login-run-service');
 
 function parseBoolean(value, fallback) {
   if (value == null || value === '') {
@@ -13,13 +11,20 @@ function parseBoolean(value, fallback) {
   return ['1', 'true', 'yes', 'on'].includes(String(value).toLowerCase());
 }
 
-function parseNumber(value, fallback) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed)) {
-    return fallback;
-  }
+function installErrorHandler(fastify) {
+  fastify.setErrorHandler((error, request, reply) => {
+    const statusCode =
+      Number.isInteger(error.statusCode) && error.statusCode >= 400
+        ? error.statusCode
+        : 500;
 
-  return Math.trunc(parsed);
+    request.log.error({ err: error }, 'request failed');
+
+    reply.code(statusCode).send({
+      status: 'error',
+      message: statusCode >= 500 ? 'Internal Server Error' : error.message,
+    });
+  });
 }
 
 function buildApp(options = {}) {
@@ -28,37 +33,41 @@ function buildApp(options = {}) {
     trustProxy: options.trustProxy ?? parseBoolean(process.env.FASTIFY_TRUST_PROXY, false),
   });
 
-  const orchestrator =
-    options.orchestrator ||
-    createLiveSessionOrchestrator({
-      defaultWaitMs: parseNumber(process.env.LIVE_ALIAS_DEFAULT_WAIT_MS, 8000),
-      maxWaitMs: parseNumber(process.env.LIVE_ALIAS_MAX_WAIT_MS, 15000),
-      expirySafetyMs: parseNumber(process.env.LIVE_ALIAS_EXPIRY_SAFETY_MS, 5000),
-      defaultSessionTtlMs: parseNumber(process.env.SESSION_API_TTL_MS, 604800000),
-      defaultProcessKeepAliveMs: parseNumber(
-        process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS,
-        300000
-      ),
-      connectTimeoutMs: parseNumber(process.env.SESSION_API_CONNECT_TIMEOUT_MS, 60000),
-      autoCreateSession: parseBoolean(process.env.LIVE_ALIAS_AUTO_CREATE_SESSION, true),
-      autoAttachOwner: parseBoolean(process.env.LIVE_ALIAS_AUTO_ATTACH_OWNER, true),
+  const loginRunService =
+    options.loginRunService ||
+    createLoginRunService({
+      probe: options.probe,
+      probeOptions: options.probeOptions,
+      now: options.now,
+      idFactory: options.idFactory,
+      ttlMs: options.ttlMs,
+      processKeepAliveMs: options.processKeepAliveMs,
+      connectTimeoutMs: options.connectTimeoutMs,
+      waitMs: options.waitMs,
+      maxActions: options.maxActions,
+      actionWaitMs: options.actionWaitMs,
     });
 
-  app.decorate('liveSessionOrchestrator', orchestrator);
+  app.decorate('loginRunService', loginRunService);
 
   installErrorHandler(app);
-  app.register(liveAliasRoutes, {
-    defaultWaitMs: parseNumber(process.env.LIVE_ALIAS_DEFAULT_WAIT_MS, 8000),
+
+  app.get('/health', async () => {
+    return {
+      status: 'ok',
+      service: 'puppeteer-login-api',
+      uptimeSec: Math.round(process.uptime()),
+      now: new Date().toISOString(),
+    };
   });
-  app.register(adminOwnerRoutes, {
-    prefix: '/admin/owners',
-    adminApiKey: options.adminApiKey || process.env.ADMIN_API_KEY || '',
-    allowSessionCreate: parseBoolean(process.env.LIVE_ALIAS_AUTO_CREATE_SESSION, true),
+
+  app.register(loginRoutes, {
+    prefix: '/v1/logins',
   });
 
   app.addHook('onClose', async () => {
-    if (typeof orchestrator.close === 'function') {
-      await orchestrator.close();
+    if (typeof loginRunService.close === 'function') {
+      await loginRunService.close();
     }
   });
 

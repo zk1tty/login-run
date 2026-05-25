@@ -1,4 +1,5 @@
 .env
+.auth/
 node_modules/
 temp/
 

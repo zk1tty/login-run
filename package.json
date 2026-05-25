@@ -10,11 +10,11 @@
     "live:url": "node scripts/run/local-browserless/any-url/live-url.js",
     "watch": "node scripts/run/local-browserless/any-url/watch-session.js",
     "watch:session": "node scripts/run/local-browserless/any-url/watch-session.js",
-    "auth1": "bash scripts/run/session-api/hsa-workflow/phase1-auth.sh",
-    "auth2": "bash scripts/run/session-api/hsa-workflow/phase2-auth.sh",
-    "study:run": "node scripts/run/session-api/any-url/challenge-study.js",
-    "study:report": "node scripts/run/session-api/any-url/challenge-study-report.js",
-    "trace:ws": "node scripts/run/session-api/any-url/ws-health-check.js",
+    "study:login:captcha": "node scripts/run/session-api/any-url/login-workflow-runner.js",
+    "study:login:keepalive:probe": "node scripts/run/session-api/any-url/puppeteer-keepalive-probe.js",
+    "study:login:keepalive:concurrency": "node scripts/run/session-api/any-url/puppeteer-keepalive-concurrency-probe.js",
+    "otp:gmail:init": "node scripts/run/otp/gmail-oauth-init.js",
+    "otp:gmail:watcher": "node scripts/run/otp/gmail-otp-to-file.js",
     "legacy:login:agentql:reuse-live": "node scripts/legacy/agentql/login-agentql-reuse-live-session.js",
     "login:agentql:reuse-live": "node scripts/legacy/agentql/login-agentql-reuse-live-session.js",
     "start:bl-server": "node src/server.js",
@@ -26,7 +26,12 @@
     "cheerio": "^1.2.0",
     "dotenv": "^17.2.3",
     "fastify": "^5.8.5",
+    "googleapis": "^172.0.0",
     "playwright-core": "^1.58.1",
     "puppeteer-core": "^24.9.0"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.4.0"
   }
 }
