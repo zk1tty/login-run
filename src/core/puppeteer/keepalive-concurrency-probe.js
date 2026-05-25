@@ -1,13 +1,13 @@
 const fs = require('fs');
 const path = require('path');
 
-const { toTimestampTag } = require('./time');
+const { toTimestampTag } = require('../utils/time');
 const {
   BrowserlessSession,
   normalizeSessionPayload,
   redactUrlSecretParams,
-} = require('./browserless-session');
-const { PuppeteerSessionRuntime } = require('./puppeteer-session-runtime');
+} = require('../browserless/browserless-session');
+const { PuppeteerSessionRuntime } = require('./session-runtime');
 
 const DEFAULT_TARGET_URL = 'https://example.com';
 const DEFAULT_COUNT = 10;

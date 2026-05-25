@@ -16,7 +16,7 @@ const {
   resolveResumeTargetUrl,
   shouldResumeAfterObserve,
   shouldWaitForOtpFromFile,
-} = require('../../src/core/login-agent/login-workflow-runner');
+} = require('../../src/core/workflow/login-workflow-runner');
 
 test('parseWorkflowPhase accepts only short phase names', () => {
   assert.equal(parseWorkflowPhase('1'), '1');

@@ -3,7 +3,7 @@ const path = require('path');
 const { chromium } = require('playwright-core');
 
 const { waitForPageReady } = require('../../../scripts/lib/helpers');
-const { toTimestampTag } = require('./time');
+const { toTimestampTag } = require('../utils/time');
 const {
   inspectRuntimeInventory,
   classifyRuntimeStage,
@@ -21,11 +21,11 @@ const { executeRuntimeAction } = require('./action-executor');
 const {
   DEFAULT_ROUTE: DEFAULT_CONNECTION_ROUTE,
   resolveLoginConnection,
-} = require('./login-connection');
+} = require('../browserless/login-connection');
 const {
   normalizeSessionPayload,
   redactUrlSecretParams,
-} = require('./browserless-session');
+} = require('../browserless/browserless-session');
 const { ManualCaptchaSolver } = require('./manual-captcha-solver');
 
 const DEFAULT_WAIT_MS = 45000;

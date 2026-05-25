@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const {
   PuppeteerKeepAliveProbe,
   buildProbeCheckpoint,
-} = require('./puppeteer-keepalive-probe');
+} = require('../puppeteer/keepalive-probe');
 
 const CUSTOMER_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 

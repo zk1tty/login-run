@@ -2,7 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { buildApp } = require('../src/app');
-const { createLoginRunService } = require('../src/core/login-agent/login-run-service');
+const { createLoginRunService } = require('../src/core/run/login-run-service');
 
 function createProbeResult(input = {}) {
   const state = input.state || 'authed';

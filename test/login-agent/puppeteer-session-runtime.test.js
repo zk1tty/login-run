@@ -4,7 +4,7 @@ const test = require('node:test');
 const {
   PuppeteerSessionRuntime,
   pickActivePage,
-} = require('../../src/core/login-agent/puppeteer-session-runtime');
+} = require('../../src/core/puppeteer/session-runtime');
 
 test('pickActivePage returns existing page before creating a new one', async () => {
   const existingPage = { id: 'page-1' };

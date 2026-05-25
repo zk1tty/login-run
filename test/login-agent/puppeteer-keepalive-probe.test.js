@@ -12,7 +12,7 @@ const {
   runPuppeteerKeepAliveProbeCli,
   shouldWaitForOtpFromFile,
   waitForOtpCode,
-} = require('../../src/core/login-agent/puppeteer-keepalive-probe');
+} = require('../../src/core/puppeteer/keepalive-probe');
 
 function createEvaluatePageStub(input = {}) {
   const store = {

@@ -3,7 +3,7 @@ require('dotenv').config({ quiet: true });
 
 const {
   runPuppeteerKeepAliveProbeCli,
-} = require('../../src/core/login-agent/puppeteer-keepalive-probe');
+} = require('../../src/core/puppeteer/keepalive-probe');
 
 async function main() {
   await runPuppeteerKeepAliveProbeCli();

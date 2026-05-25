@@ -7,7 +7,7 @@ const {
   applyBrowserlessCaptchaAutoSolved,
   applyBrowserlessCaptchaManualSolve,
   applyDomChallengeObservation,
-} = require('../../src/core/login-agent/captcha-state');
+} = require('../../src/core/workflow/captcha-state');
 
 function makeEvent(offsetMs) {
   return {

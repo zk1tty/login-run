@@ -1,20 +1,20 @@
 const fs = require('fs');
 const path = require('path');
 
-const { toTimestampTag } = require('./time');
+const { toTimestampTag } = require('../utils/time');
 const {
   inspectRuntimeInventory,
   classifyRuntimeStage,
-} = require('./runtime-inventory');
-const { planRuntimeAction } = require('./action-planner');
-const { executeRuntimeAction } = require('./action-executor');
+} = require('../workflow/runtime-inventory');
+const { planRuntimeAction } = require('../workflow/action-planner');
+const { executeRuntimeAction } = require('../workflow/action-executor');
 const {
   BrowserlessSession,
   normalizeSessionPayload,
   redactUrlSecretParams,
-} = require('./browserless-session');
-const { PuppeteerSessionRuntime } = require('./puppeteer-session-runtime');
-const { adaptPuppeteerPage } = require('./puppeteer-page-adapter');
+} = require('../browserless/browserless-session');
+const { PuppeteerSessionRuntime } = require('./session-runtime');
+const { adaptPuppeteerPage } = require('./page-adapter');
 
 function toInt(value, fallback, minimum = 0) {
   const parsed = Number(value);

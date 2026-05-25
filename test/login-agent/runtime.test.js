@@ -1,8 +1,8 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { classifyRuntimeStage } = require('../../src/core/login-agent/runtime-inventory');
-const { planRuntimeAction } = require('../../src/core/login-agent/action-planner');
+const { classifyRuntimeStage } = require('../../src/core/workflow/runtime-inventory');
+const { planRuntimeAction } = require('../../src/core/workflow/action-planner');
 
 test('runtime classifier treats username-first page as identifier, not otp', () => {
   const inventory = {

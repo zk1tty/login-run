@@ -8,10 +8,10 @@ const {
   buildSessionPayload,
   normalizeSolveMode,
   redactUrlSecretParams,
-} = require('../../src/core/login-agent/browserless-session');
+} = require('../../src/core/browserless/browserless-session');
 const {
   sanitizeSolveResult,
-} = require('../../src/core/login-agent/manual-captcha-solver');
+} = require('../../src/core/workflow/manual-captcha-solver');
 
 test('appendConnectionParams adds solveCaptchas and timeout to session connect URL', () => {
   const endpoint = appendConnectionParams(

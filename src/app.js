@@ -1,7 +1,7 @@
 const Fastify = require('fastify');
 
 const loginRoutes = require('./routes/login-routes');
-const { createLoginRunService } = require('./core/login-agent/login-run-service');
+const { createLoginRunService } = require('./core/run/login-run-service');
 
 function parseBoolean(value, fallback) {
   if (value == null || value === '') {

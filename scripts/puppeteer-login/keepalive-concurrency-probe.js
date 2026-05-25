@@ -3,7 +3,7 @@ require('dotenv').config({ quiet: true });
 
 const {
   runPuppeteerKeepAliveConcurrencyProbeCli,
-} = require('../../src/core/login-agent/puppeteer-keepalive-concurrency-probe');
+} = require('../../src/core/puppeteer/keepalive-concurrency-probe');
 
 async function main() {
   const summary = await runPuppeteerKeepAliveConcurrencyProbeCli();

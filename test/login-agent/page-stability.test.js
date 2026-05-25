@@ -4,7 +4,7 @@ const test = require('node:test');
 const {
   actionSelectors,
   waitForPageActionStability,
-} = require('../../src/core/login-agent/page-stability');
+} = require('../../src/core/workflow/page-stability');
 
 function createFakePage(snapshots) {
   let index = 0;

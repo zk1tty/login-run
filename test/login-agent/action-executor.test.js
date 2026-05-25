@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { executeRuntimeAction } = require('../../src/core/login-agent/action-executor');
+const { executeRuntimeAction } = require('../../src/core/workflow/action-executor');
 
 class FakeElement {
   constructor(input = {}) {
