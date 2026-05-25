@@ -6,6 +6,8 @@ This repo now centers on the Puppeteer-only login API server.
 
 - `design/puppeteer-login-api.md`
   - Current web server contract and runtime ownership model.
+- `design/project-overview.md`
+  - Product motivation and infrastructure principles.
 - `design/login-workflow.md`
   - Deterministic login workflow design: inventory, classification, planning, execution.
 
