@@ -33,6 +33,20 @@
     "LOGIN_ENABLE_PROMPT_FALLBACKS": "false",
     "LIVE_URL_TIMEOUT_MS": "900000"
   },
+  "cloud_stealth_residential": {
+    "BROWSERLESS_WS_BASE": "wss://production-sfo.browserless.io",
+    "BROWSERLESS_HTTP_BASE": "https://production-sfo.browserless.io",
+    "BROWSERLESS_LOGIN_CONNECT_MODE": "cdp",
+    "BROWSERLESS_CDP_PATH": "/stealth",
+    "SESSION_API_STEALTH": "true",
+    "BROWSERLESS_PROXY": "residential",
+    "BROWSERLESS_PROXY_COUNTRY": "us",
+    "BROWSERLESS_REMOTE_PROFILE_ROOT": "/profiles",
+    "BROWSERLESS_TIMEOUT_SECONDS": "",
+    "BROWSERLESS_TIMEOUT_MS": "300000",
+    "LOGIN_ENABLE_PROMPT_FALLBACKS": "false",
+    "LIVE_URL_TIMEOUT_MS": "300000"
+  },
   "cloud_stealth_residential_sticky": {
     "BROWSERLESS_WS_BASE": "wss://production-sfo.browserless.io",
     "BROWSERLESS_HTTP_BASE": "https://production-sfo.browserless.io",
