@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { buildApp } = require('../src/app');
+const { buildApp } = require('../src/api/app');
 const { createLoginRunService } = require('../src/core/run/login-run-service');
 
 function createProbeResult(input = {}) {

@@ -6,6 +6,13 @@ const {
 } = require('../puppeteer/keepalive-probe');
 const { LoginRun } = require('../../login/login-run');
 
+/**
+ * @typedef {import('../../login/login-types').LoginRunService} LoginRunService
+ * @typedef {import('../../login/login-types').StartLoginRequest} StartLoginRequest
+ * @typedef {import('../../login/login-types').SubmitOtpRequest} SubmitOtpRequest
+ * @typedef {import('../../login/login-types').PublicLoginRun} PublicLoginRun
+ */
+
 const CUSTOMER_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
 function toInt(value, fallback, minimum = 0) {
@@ -121,6 +128,10 @@ function publicRun(run) {
   return run.toPublicJson();
 }
 
+/**
+ * @param {object} options
+ * @returns {LoginRunService}
+ */
 function createLoginRunService(options = {}) {
   const probe = options.probe || new PuppeteerKeepAliveProbe(options.probeOptions || {});
   const now = options.now || (() => new Date().toISOString());
@@ -259,6 +270,7 @@ function createLoginRunService(options = {}) {
     }
   }
 
+  /** @param {StartLoginRequest} input */
   function startLogin(input = {}) {
     const customerId = assertCustomerId(input.customerId);
     const targetUrl = normalizeRequiredString(input.targetUrl, 'targetUrl');
@@ -287,6 +299,7 @@ function createLoginRunService(options = {}) {
     return publicRun(run);
   }
 
+  /** @param {string} runId @param {SubmitOtpRequest} input */
   function submitOtp(runId, input = {}) {
     const run = getRunOrThrow(runId);
     const code = normalizeRequiredString(input.code, 'code');
@@ -310,10 +323,12 @@ function createLoginRunService(options = {}) {
     return publicRun(run);
   }
 
+  /** @param {string} runId @returns {PublicLoginRun} */
   function getRun(runId) {
     return publicRun(getRunOrThrow(runId));
   }
 
+  /** @param {string} runId @param {(event: any) => void} listener */
   function subscribe(runId, listener) {
     const run = getRunOrThrow(runId);
     const listeners = subscribers.get(run.runId) || new Set();
@@ -350,14 +365,14 @@ function createLoginRunService(options = {}) {
     subscribers.clear();
   }
 
-  return {
+  return /** @type {LoginRunService} */ ({
     startLogin,
     submitOtp,
     getRun,
     subscribe,
     whenSettled,
     close,
-  };
+  });
 }
 
 module.exports = {

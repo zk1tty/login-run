@@ -1,8 +1,26 @@
+/**
+ * @typedef {import('../../login/login-types').LoginRunService} LoginRunService
+ * @typedef {import('../../login/login-types').LoginEvent} LoginEvent
+ * @typedef {import('../../login/login-types').LoginRunAcceptedResponse} LoginRunAcceptedResponse
+ * @typedef {import('../../login/login-types').StartLoginRequest} StartLoginRequest
+ * @typedef {import('../../login/login-types').SubmitOtpRequest} SubmitOtpRequest
+ * @typedef {import('fastify').FastifyInstance} FastifyInstance
+ */
+
+/**
+ * @param {unknown} reply
+ * @param {LoginEvent} event
+ */
 function sendSse(reply, event) {
   reply.raw.write(`event: ${event.type}\n`);
   reply.raw.write(`data: ${JSON.stringify(event.data)}\n\n`);
 }
 
+/**
+ * @param {FastifyInstance & { loginRunService: LoginRunService }} fastify
+ * @param {object} _options
+ * @param {Function} done
+ */
 function loginRoutes(fastify, _options, done) {
   const runParamsSchema = {
     type: 'object',
@@ -33,22 +51,24 @@ function loginRoutes(fastify, _options, done) {
         additionalProperties: false,
       },
     },
-  }, async (request, reply) => {
+  }, async (/** @type {{ body: StartLoginRequest }} */ request, /** @type {any} */ reply) => {
     const run = fastify.loginRunService.startLogin(request.body || {});
-    reply.code(202).send({
+    /** @type {LoginRunAcceptedResponse} */
+    const response = {
       runId: run.runId,
       status: run.status,
       state: run.state,
       statusUrl: `/v1/logins/${encodeURIComponent(run.runId)}`,
       eventsUrl: `/v1/logins/${encodeURIComponent(run.runId)}/events`,
-    });
+    };
+    reply.code(202).send(response);
   });
 
   fastify.get('/:runId', {
     schema: {
       params: runParamsSchema,
     },
-  }, async request => {
+  }, async (/** @type {{ params: { runId: string }}} */ request) => {
     return fastify.loginRunService.getRun(request.params.runId);
   });
 
@@ -56,7 +76,10 @@ function loginRoutes(fastify, _options, done) {
     schema: {
       params: runParamsSchema,
     },
-  }, async (request, reply) => {
+  }, async (
+    /** @type {{ params: { runId: string }}} */ request,
+    /** @type {any} */ reply
+  ) => {
     fastify.loginRunService.getRun(request.params.runId);
 
     reply.hijack();
@@ -92,15 +115,20 @@ function loginRoutes(fastify, _options, done) {
         additionalProperties: false,
       },
     },
-  }, async (request, reply) => {
+  }, async (
+    /** @type {{ params: { runId: string }, body: SubmitOtpRequest }} */ request,
+    /** @type {any} */ reply
+  ) => {
     const run = fastify.loginRunService.submitOtp(request.params.runId, request.body || {});
-    reply.code(202).send({
+    /** @type {LoginRunAcceptedResponse} */
+    const response = {
       runId: run.runId,
       status: run.status,
       state: run.state,
       statusUrl: `/v1/logins/${encodeURIComponent(run.runId)}`,
       eventsUrl: `/v1/logins/${encodeURIComponent(run.runId)}/events`,
-    });
+    };
+    reply.code(202).send(response);
   });
 
   done();
