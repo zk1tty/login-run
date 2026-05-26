@@ -34,6 +34,8 @@ export type WorkflowStageSnapshot = {
   reason?: string;
   selector?: string;
   terminalOutcome?: string;
+  identifierSelector?: string;
+  passwordSelector?: string;
 };
 
 export type RuntimeInventory = {

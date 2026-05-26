@@ -85,10 +85,10 @@ bun test
 
 ### 5. Planner And Executor
 
-- [ ] Convert `src/core/workflow/action-planner.js` to TypeScript.
+- [x] Convert `src/core/workflow/action-planner.js` to TypeScript.
   - Type planner input, candidates, OTP delivery selection, and planned actions.
   - Preserve current action priority and fallback order.
-- [ ] Convert `src/core/workflow/action-executor.js` to TypeScript.
+- [x] Convert `src/core/workflow/action-executor.js` to TypeScript.
   - Type executor input, runtime/page adapter contract, action result, and error cases.
   - Preserve current verification behavior after fill/select/check.
 
