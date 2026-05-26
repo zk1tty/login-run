@@ -8,12 +8,8 @@ const {
 } = require('../workflow/runtime-inventory');
 const { planRuntimeAction } = require('../workflow/action-planner');
 const { executeRuntimeAction } = require('../workflow/action-executor');
-const {
-  BrowserlessSession,
-  normalizeSessionPayload,
-  redactUrlSecretParams,
-} = require('../browserless/browserless-session');
-const { PuppeteerSessionRuntime } = require('./session-runtime');
+const { BrowserlessSessionClient } = require('../browserless/browserless-session-client');
+const { PuppeteerRuntime } = require('./puppeteer-runtime');
 const { adaptPuppeteerPage } = require('./page-adapter');
 
 function toInt(value, fallback, minimum = 0) {
@@ -26,6 +22,113 @@ function toInt(value, fallback, minimum = 0) {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function normalizeSessionHandle(input, checkpointFallback = {}) {
+  if (input instanceof BrowserlessSessionClient) {
+    return input;
+  }
+  if (!input || typeof input !== 'object') {
+    return BrowserlessSessionClient.fromCheckpoint(checkpointFallback);
+  }
+  if (input.session && (input.session.connect || input.session.stop || input.session.id)) {
+    return BrowserlessSessionClient.fromCheckpoint(input.session);
+  }
+  return BrowserlessSessionClient.fromCheckpoint(input);
+}
+
+function normalizeRuntimeInstance(input) {
+  if (input instanceof PuppeteerRuntime) {
+    return input;
+  }
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+  const rawPage = input.page || input.getPage?.();
+  const getRuntimeDriverPage = () => {
+    if (typeof input.getDriverPage === 'function') {
+      const maybePromise = input.getDriverPage();
+      if (typeof maybePromise?.then === 'function') {
+        return null;
+      }
+      return maybePromise || null;
+    }
+    return rawPage ? adaptPuppeteerPage(rawPage) : null;
+  };
+
+  const connectTimeoutMs = toInt(input.getConnectTimeoutMs?.(), input.connectTimeoutMs, 60000);
+  const pagesMethod = typeof input.listPages === 'function'
+    ? input.listPages.bind(input)
+    : null;
+
+  const browser = input.browser || null;
+  const runtimeEndpoint = String(input.endpoint || input.connectEndpoint || '').trim();
+
+  return {
+    endpoint: runtimeEndpoint,
+    connectTimeoutMs,
+    browser,
+    page: rawPage || null,
+    cdp: input.cdp || null,
+    getDriverPage() {
+      return getRuntimeDriverPage();
+    },
+    getPage() {
+      return this.page;
+    },
+    getBrowser() {
+      return this.browser;
+    },
+    getConnectTimeoutMs() {
+      return toInt(connectTimeoutMs, 60000, 1000);
+    },
+    async getCurrentUrl() {
+      return typeof this.page?.url === 'function' ? this.page.url() : String(this.page?.url || '');
+    },
+    async getCurrentTitle() {
+      return typeof this.page?.title === 'function' ? this.page.title() : String(this.page?.title || '');
+    },
+    async navigate(url, options) {
+      if (!this.page || typeof this.page.goto !== 'function') {
+        throw new Error('Puppeteer runtime has no active page.');
+      }
+      await this.page.goto(url, options);
+    },
+    async listPages() {
+      if (!pagesMethod) {
+        return [];
+      }
+      return pagesMethod().catch(() => []);
+    },
+    async close() {
+      if (this.browser && typeof this.browser.close === 'function') {
+        await this.browser.close();
+        return;
+      }
+      if (typeof input.close === 'function') {
+        await input.close();
+      }
+    },
+    async disconnect() {
+      if (typeof input.disconnect === 'function') {
+        await input.disconnect();
+        return;
+      }
+      if (this.browser && typeof this.browser.disconnect === 'function') {
+        this.browser.disconnect();
+      }
+    },
+    toRecord() {
+      return {
+        runtime: 'puppeteer',
+        endpoint: runtimeEndpoint,
+        hasBrowser: Boolean(browser),
+        hasPage: Boolean(rawPage),
+        hasCdp: Boolean(input.cdp),
+        connectTimeoutMs,
+      };
+    },
+  };
 }
 
 function appendJsonLine(filePath, value) {
@@ -233,7 +336,7 @@ function summarizeInventory(inventory = {}) {
   };
 }
 
-async function capturePageArtifacts(page, input = {}) {
+async function capturePageArtifacts(runtimeOrPage, input = {}) {
   const label = String(input.label || 'landing');
   const screenshotsDir = String(input.screenshotsDir || '');
   const inventoriesDir = String(input.inventoriesDir || '');
@@ -245,19 +348,21 @@ async function capturePageArtifacts(page, input = {}) {
   const inventoryPath = inventoriesDir
     ? path.resolve(inventoriesDir, `${prefix}-${label}-runtime.json`)
     : '';
+  const runtimePage = resolveRuntimeDriverPage(runtimeOrPage) || runtimeOrPage;
+  const artifactPage = runtimeOrPage?.getPage?.() || runtimeOrPage;
 
   let snapshot = null;
   let screenshotError = '';
   try {
-    snapshot = await detectChallengeSnapshot(page);
-    if (screenshotPath && typeof page.screenshot === 'function') {
-      await page.screenshot({ path: screenshotPath, fullPage: true });
+    snapshot = await detectChallengeSnapshot(runtimePage);
+    if (screenshotPath && artifactPage && typeof artifactPage.screenshot === 'function') {
+      await artifactPage.screenshot({ path: screenshotPath, fullPage: true });
     }
   } catch (error) {
     screenshotError = String(error?.message || error || 'unknown_error');
   }
 
-  const inventory = await inspectRuntimeInventory(page);
+  const inventory = await inspectRuntimeInventory(runtimePage);
   const stage = classifyRuntimeStage(inventory, snapshot);
   const metrics = {
     label,
@@ -308,21 +413,37 @@ async function capturePageArtifacts(page, input = {}) {
   };
 }
 
+function resolveRuntimeDriverPage(runtimeOrPage) {
+  if (!runtimeOrPage || typeof runtimeOrPage !== 'object') {
+    return null;
+  }
+  if (
+    typeof runtimeOrPage.evaluate === 'function' &&
+    typeof runtimeOrPage.locator === 'function'
+  ) {
+    return runtimeOrPage;
+  }
+  if (typeof runtimeOrPage.getDriverPage === 'function') {
+    return runtimeOrPage.getDriverPage();
+  }
+  return null;
+}
+
 class PuppeteerKeepAliveProbe {
   constructor(input = {}) {
-    this.createSession = input.createSession || (async options => BrowserlessSession.create(options));
-    this.connectRuntime = input.connectRuntime || (async options => PuppeteerSessionRuntime.connect(options));
+    this.createSession = input.createSession || (async options => BrowserlessSessionClient.create(options));
+    this.connectRuntime = input.connectRuntime || (async options => PuppeteerRuntime.connect(options));
     this.readCheckpoint = input.readCheckpoint || readCheckpoint;
   }
 
   async run(input = {}) {
     const checkpoint = input.checkpoint || this.readCheckpoint(input.checkpointPath);
     const phase = parseProbePhase(input.phase, checkpoint);
-    let session = normalizeSessionPayload(checkpoint?.session || {});
+    let sessionHandle = normalizeSessionHandle(input.session || checkpoint?.session, {});
     let sessionCreated = false;
     let sessionRecord = null;
 
-    if (!session.connect) {
+    if (!sessionHandle.hasConnect()) {
       const created = await this.createSession({
         httpBase: input.httpBase,
         token: input.token,
@@ -335,18 +456,22 @@ class PuppeteerKeepAliveProbe {
       });
       sessionCreated = true;
       sessionRecord = created.toRecord();
-      session = created.session;
+      sessionHandle = normalizeSessionHandle(created);
     }
 
-    if (!session.connect) {
+    if (!sessionHandle.hasConnect()) {
       throw new Error('Puppeteer keep-alive probe requires session.connect.');
     }
 
-    const runtime = await this.connectRuntime({
-      endpoint: session.connect,
+    const runtime = normalizeRuntimeInstance(await this.connectRuntime({
+      endpoint: sessionHandle.connectUrl,
       connectTimeoutMs: input.connectTimeoutMs,
       puppeteer: input.puppeteer,
-    });
+    }));
+
+    if (!runtime) {
+      throw new Error('Puppeteer keep-alive probe failed to create a runtime.');
+    }
 
     const targetUrl = String(
       input.targetUrl || checkpoint?.targetUrl || checkpoint?.currentUrl || ''
@@ -364,17 +489,20 @@ class PuppeteerKeepAliveProbe {
     const otpWaitMs = toInt(input.otpWaitMs, 0, 0);
     const otpPollMs = toInt(input.otpPollMs, 1000, 250);
     const otpMaxAttempts = toInt(input.otpMaxAttempts, 3, 1);
-    const driverPage = adaptPuppeteerPage(runtime.page);
+    const driverPage = runtime.getDriverPage();
+    if (!driverPage) {
+      throw new Error('Puppeteer keep-alive probe requires a driver-ready runtime page.');
+    }
 
     try {
       if (recordEvent) {
         recordEvent(sessionCreated ? 'session_created' : 'session_reused', {
           session: {
-            id: session.id,
-            hasConnect: Boolean(session.connect),
-            hasStop: Boolean(session.stop),
-            ttlMs: session.ttlMs || 0,
-            processKeepAliveMs: session.processKeepAliveMs || 0,
+            id: sessionHandle.id,
+            hasConnect: sessionHandle.hasConnect(),
+            hasStop: Boolean(sessionHandle.stopUrl),
+            ttlMs: sessionHandle.ttlMs || 0,
+            processKeepAliveMs: sessionHandle.processKeepAliveMs || 0,
           },
           sessionCreated,
         });
@@ -384,12 +512,8 @@ class PuppeteerKeepAliveProbe {
           runtime: runtime.toRecord(),
         });
       }
-      const beforeUrl = typeof runtime.page.url === 'function'
-        ? runtime.page.url()
-        : String(runtime.page.url || '');
-      const beforeTitle = typeof runtime.page.title === 'function'
-        ? await runtime.page.title()
-        : '';
+      const beforeUrl = await runtime.getCurrentUrl();
+      const beforeTitle = await runtime.getCurrentTitle();
 
       if (targetUrl && (phase === 'bootstrap' || reconnectNavigate)) {
         if (recordEvent) {
@@ -399,20 +523,16 @@ class PuppeteerKeepAliveProbe {
             fromUrl: beforeUrl,
           });
         }
-        await runtime.page.goto(targetUrl, {
+        await runtime.navigate(targetUrl, {
           waitUntil: 'domcontentloaded',
-          timeout: runtime.connectTimeoutMs,
+          timeout: runtime.getConnectTimeoutMs(),
         });
         if (recordEvent) {
           recordEvent('navigate_complete', {
             phase,
             targetUrl,
-            url: typeof runtime.page.url === 'function'
-              ? runtime.page.url()
-              : String(runtime.page.url || ''),
-            title: typeof runtime.page.title === 'function'
-              ? await runtime.page.title()
-              : '',
+            url: await runtime.getCurrentUrl(),
+            title: await runtime.getCurrentTitle(),
           });
         }
       }
@@ -420,15 +540,9 @@ class PuppeteerKeepAliveProbe {
         await sleep(waitMs);
       }
 
-      const currentUrl = typeof runtime.page.url === 'function'
-        ? runtime.page.url()
-        : String(runtime.page.url || '');
-      const pageTitle = typeof runtime.page.title === 'function'
-        ? await runtime.page.title()
-        : '';
-      const pages = runtime.browser && typeof runtime.browser.pages === 'function'
-        ? await runtime.browser.pages().catch(() => [])
-        : [];
+      const currentUrl = await runtime.getCurrentUrl();
+      const pageTitle = await runtime.getCurrentTitle();
+      const pages = await runtime.listPages();
       const observed = {
         beforeUrl,
         beforeTitle,
@@ -436,7 +550,7 @@ class PuppeteerKeepAliveProbe {
         afterTitle: pageTitle,
         pageCount: Array.isArray(pages) ? pages.length : 0,
       };
-      const capture = await capturePageArtifacts(runtime.page, {
+      const capture = await capturePageArtifacts(runtime, {
         label: phase,
         screenshotsDir,
         inventoriesDir,
@@ -492,10 +606,10 @@ class PuppeteerKeepAliveProbe {
               actionPlan.detail?.stage === 'blocked_or_unknown'
             ) {
               await driverPage.waitForLoadState('domcontentloaded', {
-                timeout: Math.min(runtime.connectTimeoutMs, 10000),
+                timeout: Math.min(runtime.getConnectTimeoutMs(), 10000),
               }).catch(() => {});
               await driverPage.waitForTimeout(Math.min(actionWaitMs || 1000, 5000));
-              const retryCapture = await capturePageArtifacts(runtime.page, {
+            const retryCapture = await capturePageArtifacts(runtime, {
                 label: `post-wait-${actionIndex + 1}`,
                 screenshotsDir,
                 inventoriesDir,
@@ -587,7 +701,7 @@ class PuppeteerKeepAliveProbe {
             break;
           }
 
-          const actionResult = await executeRuntimeAction(driverPage, actionPlan, payload, {
+          const actionResult = await executeRuntimeAction(runtime, actionPlan, payload, {
             waitMs: actionWaitMs,
           });
           workflow.actionResult = actionResult;
@@ -604,11 +718,11 @@ class PuppeteerKeepAliveProbe {
           }
 
           await driverPage.waitForLoadState('domcontentloaded', {
-            timeout: Math.min(runtime.connectTimeoutMs, 10000),
+            timeout: Math.min(runtime.getConnectTimeoutMs(), 10000),
           }).catch(() => {});
           await driverPage.waitForTimeout(500);
 
-          const postActionCapture = await capturePageArtifacts(runtime.page, {
+          const postActionCapture = await capturePageArtifacts(runtime, {
             label: `post-action-${actionIndex + 1}`,
             screenshotsDir,
             inventoriesDir,
@@ -626,10 +740,10 @@ class PuppeteerKeepAliveProbe {
             currentStage?.state === 'blocked_or_unknown'
           ) {
             await driverPage.waitForLoadState('domcontentloaded', {
-              timeout: Math.min(runtime.connectTimeoutMs, 10000),
+              timeout: Math.min(runtime.getConnectTimeoutMs(), 10000),
             }).catch(() => {});
             await driverPage.waitForTimeout(Math.min(actionWaitMs || 1000, 5000));
-            const transitionCapture = await capturePageArtifacts(runtime.page, {
+            const transitionCapture = await capturePageArtifacts(runtime, {
               label: `post-delivery-wait-${actionIndex + 1}`,
               screenshotsDir,
               inventoriesDir,
@@ -680,11 +794,11 @@ class PuppeteerKeepAliveProbe {
         capture,
         workflow,
         measurement,
-        session,
+        session: sessionHandle.toSessionPayload(),
         sessionCreated,
         sessionRecord,
         runtime: runtime.toRecord(),
-        endpointForLogs: redactUrlSecretParams(session.connect),
+        endpointForLogs: sessionHandle.toRuntimeRedactedLogUrl(),
       };
     } finally {
       if (input.disconnectOnComplete === false) {
