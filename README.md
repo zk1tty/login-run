@@ -24,6 +24,35 @@ Browser agents are useful, but login management is still painful:
 
 StayAuthed focuses on the common missing layer: getting a user logged in once and keeping the remote browser usable for future agent work.
 
+## Real-world Proof
+
+StayAuthed has been tested against Cloudflare Turnstile behavior using the public test page:
+
+```text
+https://browser-compat.turnstile.workers.dev/
+```
+
+The run below is generated from real captured screenshots during Browserless auto-mode Turnstile handling:
+
+![Cloudflare Turnstile auto-mode frames](docs/research/turnstile/assets/cloudflare-turnstile-auto-mode-frames.gif)
+
+It has also completed a real HealthEquity-style login workflow against:
+
+```text
+https://my.healthequity.com/ClientLogin.aspx
+```
+
+The GIF below was generated from all screenshots in one captured run. Sensitive account details are redacted:
+
+![HealthEquity login workflow, redacted](docs/research/login/assets/healthequity-login-run-redacted.gif)
+
+Observed result from a captured run:
+
+- terminal outcome: `authed`
+- workflow duration: about 108 seconds
+- flow: username -> password -> OTP delivery selection -> OTP code -> authenticated page
+- Cloudflare/CAPTCHA signals were observed during the run through Browserless and DOM events
+
 ## Current API
 
 The server exposes a small async login API.
