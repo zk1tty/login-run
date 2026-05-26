@@ -221,15 +221,15 @@ async function waitForChecked(page: RuntimePageLike, locator: LocatorLike, timeo
 
 const domExecutor = {
   async check(locator: LocatorLike, waitMs?: number): Promise<void> {
-    await locator.check({ force: true, timeout: Math.min(waitMs || 5000, 3000) });
+    await locator.check({ force: true, timeout: Math.min(waitMs ?? 0, 3000) });
   },
 
   async click(locator: LocatorLike, waitMs?: number): Promise<void> {
-    await locator.click({ timeout: waitMs || 5000 });
+    await locator.click({ timeout: waitMs ?? 0 });
   },
 
   async fill(locator: LocatorLike, value: string, waitMs?: number): Promise<void> {
-    await locator.fill(value, { timeout: waitMs || 5000 });
+    await locator.fill(value, { timeout: waitMs ?? 0 });
   },
 
   async press(locator: LocatorLike, key: string): Promise<void> {
@@ -237,8 +237,8 @@ const domExecutor = {
   },
 
   async selectOption(locator: LocatorLike, selection: string, waitMs?: number): Promise<void> {
-    await locator.selectOption({ label: selection }, { timeout: waitMs || 5000 }).catch(async () => {
-      await locator.selectOption({ value: selection }, { timeout: waitMs || 5000 });
+    await locator.selectOption({ label: selection }, { timeout: waitMs ?? 0 }).catch(async () => {
+      await locator.selectOption({ value: selection }, { timeout: waitMs ?? 0 });
     });
   },
 
@@ -246,13 +246,13 @@ const domExecutor = {
     const box = candidate.boundingBox || {};
     const x = Number(box.x || 0) + Number(box.width || 0) / 2;
     const y = Number(box.y || 0) + Number(box.height || 0) / 2;
-    if (!Number.isFinite(x) || !Number.isFinite(y) || x <= 0 || y <= 0) {
+    if (!Number.isFinite(x) || !Number.isFinite(y) || x < 0 || y < 0) {
       return false;
     }
     if (!page.mouse || typeof page.mouse.click !== 'function') {
       return false;
     }
-    await page.mouse.click(x, y, { timeout: waitMs || 5000 });
+    await page.mouse.click(x, y, { timeout: waitMs ?? 0 });
     return true;
   },
 };
@@ -334,7 +334,7 @@ async function clickAssociatedLabel(page: RuntimePageLike, option: LocatorLike, 
   }
 
   const label = page.locator(`label[for="${cssAttrValue(id)}"]`).first();
-  await label.waitFor({ state: 'visible', timeout: Math.min(waitMs || 5000, 3000) });
+  await label.waitFor({ state: 'visible', timeout: Math.min(waitMs ?? 0, 3000) });
   await domExecutor.click(label, waitMs);
   return true;
 }
@@ -355,7 +355,7 @@ async function selectDeliveryOption(
     submitCandidate: plan.submitCandidate,
     selection: plan.selection,
   } as unknown, {
-    timeoutMs: Math.max(waitMs || 5000, 15000),
+    timeoutMs: Math.max(waitMs ?? 0, 15000),
     pollMs: 250,
     quietMs: 1000,
     minStablePolls: 2,
@@ -372,14 +372,14 @@ async function selectDeliveryOption(
   }
 
   const option = page.locator(String(plan.optionSelector || '')).first();
-  await option.waitFor({ state: 'attached', timeout: waitMs || 5000 });
+  await option.waitFor({ state: 'attached', timeout: waitMs ?? 0 });
 
   const attempts: string[] = [];
 
   try {
     await domExecutor.check(option, waitMs);
     attempts.push('native_check');
-    if (await domVerifier.waitForChecked(page, option, Math.min(waitMs || 5000, 1000))) {
+    if (await domVerifier.waitForChecked(page, option, Math.min(waitMs ?? 0, 1000))) {
       return { option, method: 'native_check', attempts, stability: stability as PageStabilityResult };
     }
   } catch (error) {
@@ -389,7 +389,7 @@ async function selectDeliveryOption(
   try {
     if (await clickAssociatedLabel(page, option, waitMs)) {
       attempts.push('label_click');
-      if (await domVerifier.waitForChecked(page, option, Math.min(waitMs || 5000, 1500))) {
+      if (await domVerifier.waitForChecked(page, option, Math.min(waitMs ?? 0, 1500))) {
         return { option, method: 'label_click', attempts, stability: stability as PageStabilityResult };
       }
     }
@@ -400,7 +400,7 @@ async function selectDeliveryOption(
   try {
     if (await domExecutor.clickCandidateCenter(page, plan.optionCandidate as unknown as CandidateLike, waitMs)) {
       attempts.push('candidate_center_click');
-      if (await domVerifier.waitForChecked(page, option, Math.min(waitMs || 5000, 1500))) {
+      if (await domVerifier.waitForChecked(page, option, Math.min(waitMs ?? 0, 1500))) {
         return { option, method: 'candidate_center_click', attempts, stability: stability as PageStabilityResult };
       }
     }
@@ -443,8 +443,8 @@ export async function executeRuntimeAction(
   if (plan.type === 'click_candidate') {
     try {
       const target = page.locator(String(plan.selector || '')).first();
-      await target.waitFor({ state: 'visible', timeout: waitMs || 5000 });
-      const enabled = await domVerifier.waitForEnabled(page, target, waitMs || 5000);
+      await target.waitFor({ state: 'visible', timeout: waitMs ?? 0 });
+      const enabled = await domVerifier.waitForEnabled(page, target, waitMs ?? 0);
       if (!enabled) {
         return {
           status: 'failed',
@@ -479,7 +479,7 @@ export async function executeRuntimeAction(
   if (plan.type === 'select_option') {
     try {
       const target = page.locator(String(plan.selector || '')).first();
-      await target.waitFor({ state: 'visible', timeout: waitMs || 5000 });
+      await target.waitFor({ state: 'visible', timeout: waitMs ?? 0 });
       await domExecutor.selectOption(target, String(plan.selection || ''), waitMs);
       return {
         status: 'ok',
@@ -506,7 +506,7 @@ export async function executeRuntimeAction(
       const selection = await selectDeliveryOption(
         page,
         plan,
-        waitMs || 5000,
+        waitMs ?? 0,
         options.pageStability || {},
       );
       const option = selection.option;
@@ -537,7 +537,7 @@ export async function executeRuntimeAction(
       let submitClicked = false;
       if (plan.submitSelector) {
         const submit = page.locator(plan.submitSelector).first();
-        const enabled = await domVerifier.waitForEnabled(page, submit, waitMs || 5000);
+        const enabled = await domVerifier.waitForEnabled(page, submit, waitMs ?? 0);
         if (enabled) {
           await domExecutor.click(submit, waitMs);
           submitClicked = true;
@@ -604,7 +604,7 @@ export async function executeRuntimeAction(
 
   try {
     const input = page.locator(String(plan.inputSelector || '')).first();
-    await input.waitFor({ state: 'visible', timeout: waitMs || 5000 });
+    await input.waitFor({ state: 'visible', timeout: waitMs ?? 0 });
     await domExecutor.fill(input, value, waitMs);
     const fillVerification = await verifyFilledInput(input, value, plan.payloadKey);
 
@@ -641,7 +641,7 @@ export async function executeRuntimeAction(
     let submitClicked = false;
     if (plan.submitSelector) {
       const submit = page.locator(plan.submitSelector).first();
-      const enabled = await domVerifier.waitForEnabled(page, submit, waitMs || 5000);
+      const enabled = await domVerifier.waitForEnabled(page, submit, waitMs ?? 0);
       if (enabled) {
         await domExecutor.click(submit, waitMs);
         submitMethod = 'click';

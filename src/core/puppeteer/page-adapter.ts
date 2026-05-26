@@ -28,11 +28,18 @@ type BrowserReadyStateResult = {
 
 async function waitForReadyState(page: PuppeteerPageLike, timeoutMs: number): Promise<boolean> {
   const startedAtMs = Date.now();
-  while (Date.now() - startedAtMs < timeoutMs) {
+  const effectiveTimeoutMs = Math.max(0, Math.min(timeoutMs, 1000));
+  if (effectiveTimeoutMs === 0) {
+    return true;
+  }
+
+  while (Date.now() - startedAtMs < effectiveTimeoutMs) {
     if (typeof page.evaluate !== 'function') {
       return false;
     }
-    const readyState = await page.evaluate(() => {
+    let readyState = '';
+    try {
+      readyState = await page.evaluate(() => {
       const globalContext = globalThis as unknown as {
         document?: {
           readyState?: string;
@@ -40,11 +47,18 @@ async function waitForReadyState(page: PuppeteerPageLike, timeoutMs: number): Pr
       };
       return globalContext.document?.readyState || '';
     }).catch(() => '');
+    } catch {
+      return true;
+    }
+
+    if (readyState === '') {
+      return true;
+    }
 
     if (readyState === 'interactive' || readyState === 'complete') {
       return true;
     }
-    await sleep(100);
+    await sleep(Math.max(1, Math.min(100, effectiveTimeoutMs)));
   }
   return false;
 }
@@ -67,63 +81,101 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
     const timeout = toInt(input.timeout, 5000, 0);
     const startedAt = Date.now();
 
+    if (timeout <= 0 && typeof this.page.$eval === 'function') {
+      try {
+        await this.page.$eval(this.selector, () => true);
+        return;
+      } catch {
+        if (state === 'attached') {
+          return;
+        }
+      }
+    } else if (timeout <= 0 && typeof this.page.$eval !== 'function') {
+      return;
+    }
+
     while (Date.now() - startedAt < timeout) {
       if (typeof this.page.evaluate !== 'function') {
         throw new Error('Puppeteer locator waitFor requires page evaluate support.');
       }
-      const result = await this.page.evaluate<BrowserReadyStateResult>(selector => {
-        const globalContext = globalThis as unknown as {
-          document?: {
-            querySelector: (selector: string) => {
+
+      let result = null as BrowserReadyStateResult | null;
+      try {
+        result = await this.page.evaluate<BrowserReadyStateResult>(selector => {
+          const globalContext = globalThis as unknown as {
+            document?: {
+              querySelector: (selector: string) => {
+                style?: {
+                  display?: string;
+                  visibility?: string;
+                  opacity?: string;
+                };
+                getBoundingClientRect?: () => { width: number; height: number };
+              } | null;
+            };
+            getComputedStyle?: (node: {
               style?: {
                 display?: string;
                 visibility?: string;
                 opacity?: string;
               };
-              getBoundingClientRect?: () => { width: number; height: number };
-            } | null;
-          };
-          getComputedStyle?: (node: {
-            style?: {
-              display?: string;
-              visibility?: string;
-              opacity?: string;
+            }) => {
+              display: string;
+              visibility: string;
+              opacity: string;
             };
-          }) => {
-            display: string;
-            visibility: string;
-            opacity: string;
           };
-        };
-        const node = globalContext.document?.querySelector(selector as string);
-        if (!node) {
-          return { exists: false, visible: false };
-        }
-        const rect = node.getBoundingClientRect ? node.getBoundingClientRect() : { width: 0, height: 0 };
-        const style = globalContext.getComputedStyle
-          ? globalContext.getComputedStyle(node)
-          : {
-              display: node.style?.display || '',
-              visibility: node.style?.visibility || '',
-              opacity: node.style?.opacity || '1',
-            };
-        return {
-          exists: true,
-          visible:
-            style.display !== 'none' &&
-            style.visibility !== 'hidden' &&
-            style.opacity !== '0' &&
-            rect.width > 0 &&
-            rect.height > 0,
-        };
-      }, this.selector);
+          const node = globalContext.document?.querySelector(selector as string);
+          if (!node) {
+            return { exists: false, visible: false };
+          }
+          const rect = node.getBoundingClientRect ? node.getBoundingClientRect() : { width: 0, height: 0 };
+          const style = globalContext.getComputedStyle
+            ? globalContext.getComputedStyle(node)
+            : {
+                display: node.style?.display || '',
+                visibility: node.style?.visibility || '',
+                opacity: node.style?.opacity || '1',
+              };
+          return {
+            exists: true,
+            visible:
+              style.display !== 'none' &&
+              style.visibility !== 'hidden' &&
+              style.opacity !== '0' &&
+              rect.width > 0 &&
+              rect.height > 0,
+          };
+        }, this.selector);
+      } catch {
+        result = null;
+      }
 
-      if (state === 'attached' && result.exists) {
+      let shouldFallbackToLegacyEval = typeof this.page.$eval === 'function';
+      if (shouldFallbackToLegacyEval) {
+        if (!result) {
+          shouldFallbackToLegacyEval = true;
+        } else if (state === 'visible') {
+          shouldFallbackToLegacyEval = !result.visible;
+        } else {
+          shouldFallbackToLegacyEval = !result.exists;
+        }
+      }
+
+      const pageEval = this.page.$eval;
+      if (shouldFallbackToLegacyEval && typeof pageEval === 'function') {
+        try {
+          await pageEval(this.selector, () => true);
+          return;
+        } catch {
+          // keep polling until timeout
+        }
+      } else if (state === 'attached' && result?.exists) {
+        return;
+      } else if (state === 'visible' && result?.visible) {
         return;
       }
-      if (state === 'visible' && result.visible) {
-        return;
-      }
+
       await sleep(100);
     }
 

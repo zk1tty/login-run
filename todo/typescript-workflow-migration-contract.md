@@ -94,13 +94,13 @@ bun test
 
 ### 6. Workflow Runner And Probes
 
-- [ ] Convert `src/core/workflow/login-workflow-runner.js` to TypeScript.
+- [x] Convert `src/core/workflow/login-workflow-runner.js` to TypeScript.
   - Consume typed planner/executor/classifier contracts.
   - Keep phase loop and terminal outcome semantics unchanged.
-- [ ] Convert `src/core/puppeteer/keepalive-probe.js` to TypeScript.
+- [x] Convert `src/core/puppeteer/keepalive-probe.js` to TypeScript.
   - Keep public method stable: `run(input)`.
   - Replace loose session/runtime helper dependencies with typed wrappers.
-- [ ] Convert `src/core/puppeteer/keepalive-concurrency-probe.js` to TypeScript.
+- [x] Convert `src/core/puppeteer/keepalive-concurrency-probe.js` to TypeScript.
   - Consume the same typed `BrowserlessSessionClient` and `PuppeteerRuntime` wrappers.
 
 ### 7. API Boundary
