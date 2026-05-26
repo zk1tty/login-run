@@ -26,6 +26,7 @@ const {
   normalizeSessionPayload,
   redactUrlSecretParams,
 } = require('../browserless/browserless-session');
+const { BrowserlessSessionClient } = require('../browserless/browserless-session-client');
 const { ManualCaptchaSolver } = require('./manual-captcha-solver');
 
 const DEFAULT_WAIT_MS = 45000;
@@ -45,6 +46,18 @@ function toSafeError(error) {
     cause?.message,
   ].filter(Boolean);
   return causeParts.length ? `${message} (${causeParts.join(' ')})` : message;
+}
+
+function resolveSessionClient(connection = {}) {
+  if (connection.resource && typeof connection.resource === 'object') {
+    return BrowserlessSessionClient.fromBrowserlessSession(connection.resource);
+  }
+
+  if (connection.session && typeof connection.session === 'object') {
+    return BrowserlessSessionClient.fromCheckpoint(connection.session);
+  }
+
+  return null;
 }
 
 function toInt(value, fallback, minimum = 0) {
@@ -400,7 +413,10 @@ class LoginWorkflowRunner {
     route,
     checkpoint,
   });
-  const normalizedSession = normalizeSessionPayload(connection.session || {});
+  const sessionClient = resolveSessionClient(connection);
+  const normalizedSession = sessionClient
+    ? sessionClient.toSessionPayload()
+    : normalizeSessionPayload(connection.session || {});
   const session = (normalizedSession.connect || normalizedSession.id)
     ? normalizedSession
     : null;
@@ -409,7 +425,9 @@ class LoginWorkflowRunner {
   const solveCaptchas = connection.solveCaptchas === true;
   const captchaSolveMode = connection.captchaSolveMode || '';
   const endpoint = connection.endpoint;
-  const endpointForLogs = redactUrlSecretParams(endpoint);
+  const endpointForLogs = sessionClient?.toRuntimeRedactedLogUrl()
+    ? sessionClient.toRuntimeRedactedLogUrl()
+    : redactUrlSecretParams(endpoint);
 
   const startedAtMs = Date.now();
   const events = [];
@@ -741,7 +759,9 @@ class LoginWorkflowRunner {
     requestedConnectionMode,
     captchaSolveMode,
     sessionCreated: connection.sessionCreated === true,
-    sessionApiUrl: redactUrlSecretParams(connection.sessionApiUrl || ''),
+    sessionApiUrl: sessionClient?.sessionApiUrl
+      ? redactUrlSecretParams(sessionClient.sessionApiUrl)
+      : redactUrlSecretParams(connection.sessionApiUrl || ''),
     sessionPayload: connection.sessionPayload || null,
   });
 

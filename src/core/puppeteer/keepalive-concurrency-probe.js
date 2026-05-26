@@ -3,11 +3,9 @@ const path = require('path');
 
 const { toTimestampTag } = require('../utils/time');
 const {
-  BrowserlessSession,
-  normalizeSessionPayload,
-  redactUrlSecretParams,
-} = require('../browserless/browserless-session');
-const { PuppeteerSessionRuntime } = require('./session-runtime');
+  BrowserlessSessionClient,
+} = require('../browserless/browserless-session-client');
+const { PuppeteerRuntime } = require('./puppeteer-runtime');
 
 const DEFAULT_TARGET_URL = 'https://example.com';
 const DEFAULT_COUNT = 10;
@@ -226,13 +224,10 @@ class PuppeteerKeepAliveConcurrencyProbe {
       browser: this.browser,
       proxy: this.proxy,
     });
-    const created = await BrowserlessSession.create({
+    const created = await BrowserlessSessionClient.create({
       rawPayload: JSON.stringify(payload),
     });
-    const session = normalizeSessionPayload(created.session, {
-      ttlMs: this.ttlMs,
-      processKeepAliveMs: payload.processKeepAlive || 0,
-    });
+    const session = created.toSessionPayload();
 
     this.recordEvent('session_created', {
       index,
@@ -279,10 +274,10 @@ class PuppeteerKeepAliveConcurrencyProbe {
       created = sessionResult.created;
       row.created = true;
       row.sessionId = sessionResult.session.id;
-      row.endpoint = redactUrlSecretParams(created.buildConnectEndpoint({ solveMode: 'none' }));
+      row.endpoint = created.toRuntimeRedactedLogUrl();
 
-      runtime = await PuppeteerSessionRuntime.connect({
-        endpoint: created.buildConnectEndpoint({
+      runtime = await PuppeteerRuntime.connect({
+        endpoint: created.getConnectEndpoint({
           solveMode: 'none',
           timeout: this.connectTimeoutMs,
         }),
@@ -488,7 +483,8 @@ class PuppeteerKeepAliveConcurrencyProbe {
       let runtime = null;
       try {
         const raw = JSON.parse(fs.readFileSync(row.checkpointPath, 'utf8'));
-        const connect = String(raw?.session?.connect || '').trim();
+        const checkpointClient = BrowserlessSessionClient.fromCheckpoint(raw.session || {});
+        const connect = checkpointClient.connectUrl || String(raw?.session?.connect || '').trim();
         if (!connect) {
           throw new Error(`Missing connect URL in checkpoint: ${row.checkpointPath}`);
         }
@@ -496,8 +492,8 @@ class PuppeteerKeepAliveConcurrencyProbe {
           index: row.index,
           sessionId: row.sessionId,
         });
-        runtime = await PuppeteerSessionRuntime.connect({
-          endpoint: connect,
+        runtime = await PuppeteerRuntime.connect({
+          endpoint: checkpointClient.connectUrl || connect,
           connectTimeoutMs: this.connectTimeoutMs,
           puppeteer: this.puppeteer,
         });
@@ -632,7 +628,7 @@ function sessionResultToCheckpoint(created, session) {
     stop: session.stop,
     ttlMs: session.ttlMs || 0,
     processKeepAliveMs: session.processKeepAliveMs || 0,
-    endpoint: redactUrlSecretParams(created.buildConnectEndpoint({ solveMode: 'none' })),
+    endpoint: created?.toRuntimeRedactedLogUrl?.() || '',
   };
 }
 
