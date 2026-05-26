@@ -1,5 +1,41 @@
 const { waitForPageActionStability } = require('./page-stability');
 
+function resolveRuntimePage(input = {}) {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+  if (typeof input.locator === 'function') {
+    return input;
+  }
+  if (typeof input.getDriverPage === 'function') {
+    const page = input.getDriverPage();
+    if (page && typeof page.locator === 'function') {
+      return page;
+    }
+  }
+  if (typeof input.getPage === 'function') {
+    const page = input.getPage();
+    if (page && typeof page.locator === 'function') {
+      return page;
+    }
+    if (page && typeof page.getDriverPage === 'function') {
+      const driverPage = page.getDriverPage();
+      if (driverPage && typeof driverPage.evaluate === 'function' && typeof driverPage.locator === 'function') {
+        return driverPage;
+      }
+    }
+  }
+  return null;
+}
+
+function guardRuntimePage(input = {}) {
+  const page = resolveRuntimePage(input);
+  if (!page) {
+    throw new Error('executeRuntimeAction requires a runtime page with locator and evaluate.');
+  }
+  return page;
+}
+
 function toSafeError(error) {
   return String(error?.message || error || 'unknown_error');
 }
@@ -209,9 +245,10 @@ async function selectDeliveryOption(page, plan, waitMs, stabilityOptions = {}) {
   return { option, method: '', attempts, stability };
 }
 
-async function executeRuntimeAction(page, plan = {}, payload = {}, options = {}) {
+async function executeRuntimeAction(pageOrRuntime, plan = {}, payload = {}, options = {}) {
   const startedAtMs = Date.now();
   const waitMs = toInt(options.waitMs, 5000, 0);
+  const page = guardRuntimePage(pageOrRuntime);
 
   if (!plan || plan.type === 'none') {
     return {

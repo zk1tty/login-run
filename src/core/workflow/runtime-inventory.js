@@ -2,6 +2,42 @@ function toSafeError(error) {
   return String(error?.message || error || 'unknown_error');
 }
 
+async function resolveRuntimePage(input) {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+
+  if (typeof input.evaluate === 'function' && typeof input.locator === 'function') {
+    return input;
+  }
+
+  if (typeof input.getDriverPage === 'function') {
+    const maybeDriverPage = input.getDriverPage();
+    const driverPage = maybeDriverPage && typeof maybeDriverPage.then === 'function'
+      ? await maybeDriverPage
+      : maybeDriverPage;
+    if (driverPage && typeof driverPage.evaluate === 'function' && typeof driverPage.locator === 'function') {
+      return driverPage;
+    }
+  }
+
+  if (typeof input.getPage === 'function') {
+    const maybePage = input.getPage();
+    const page = maybePage && typeof maybePage.then === 'function'
+      ? await maybePage
+      : maybePage;
+    if (page && typeof page.evaluate === 'function' && typeof page.locator === 'function') {
+      return page;
+    }
+  }
+
+  if (input.page && typeof input.page.evaluate === 'function' && typeof input.page.locator === 'function') {
+    return input.page;
+  }
+
+  return null;
+}
+
 function candidateArea(candidate = {}) {
   const box = candidate.boundingBox || {};
   return Number(box.width || 0) * Number(box.height || 0);
@@ -31,9 +67,14 @@ function isUsableCredentialInput(candidate = {}) {
   );
 }
 
-async function inspectRuntimeInventory(page) {
+async function inspectRuntimeInventory(pageOrRuntime) {
+  const runtimePage = await resolveRuntimePage(pageOrRuntime);
   try {
-    return await page.evaluate(() => {
+    if (!runtimePage) {
+      throw new Error('inspectRuntimeInventory requires a runtime page with evaluate().');
+    }
+
+    return await runtimePage.evaluate(() => {
       function normalizeText(value, max = 160) {
         return String(value || '')
           .replace(/\s+/g, ' ')

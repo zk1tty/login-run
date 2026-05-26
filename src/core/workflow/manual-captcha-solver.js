@@ -46,7 +46,7 @@ async function sendSolveCaptcha(cdp, timeoutMs) {
 
 class ManualCaptchaSolver {
   constructor(input = {}) {
-    this.cdp = input.cdp;
+    this.cdp = input.cdp || input.runtime?.cdp || input.runtime?.getCDP?.();
     this.recordEvent = typeof input.recordEvent === 'function' ? input.recordEvent : () => {};
     this.timeoutMs = toInt(
       input.timeoutMs || process.env.CAPTCHA_SOLVE_COMMAND_TIMEOUT_MS,

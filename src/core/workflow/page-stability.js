@@ -15,6 +15,25 @@ function toSafeError(error) {
   return String(error?.message || error || 'unknown_error');
 }
 
+function resolvePageForStability(input = {}) {
+  if (!input || typeof input !== 'object') {
+    return null;
+  }
+  if (
+    typeof input.evaluate === 'function' &&
+    typeof input.waitForTimeout === 'function'
+  ) {
+    return input;
+  }
+  if (typeof input.getDriverPage === 'function') {
+    const page = input.getDriverPage();
+    if (page && typeof page.evaluate === 'function' && typeof page.waitForTimeout === 'function') {
+      return page;
+    }
+  }
+  return null;
+}
+
 function actionSelectors(plan = {}) {
   return [
     plan.selector,
@@ -60,7 +79,11 @@ function targetsAllPresent(snapshot = {}) {
   return targets.length > 0 && targets.every(target => target.exists === true);
 }
 
-async function inspectPageActionStability(page, selectors = []) {
+async function inspectPageActionStability(pageOrRuntime, selectors = []) {
+  const page = resolvePageForStability(pageOrRuntime);
+  if (!page) {
+    throw new Error('inspectPageActionStability requires a page with locator and evaluate.');
+  }
   return page.evaluate(inputSelectors => {
     if (!window.__loginAgentMutationObserver) {
       window.__loginAgentMutationCount = 0;
@@ -87,7 +110,7 @@ async function inspectPageActionStability(page, selectors = []) {
   }, selectors);
 }
 
-async function waitForPageActionStability(page, plan = {}, options = {}) {
+async function waitForPageActionStability(pageOrRuntime, plan = {}, options = {}) {
   const timeoutMs = toInt(options.timeoutMs, DEFAULT_STABILITY_TIMEOUT_MS, 0);
   const pollMs = toInt(options.pollMs, DEFAULT_STABILITY_POLL_MS, 50);
   const quietMs = toInt(options.quietMs, DEFAULT_STABILITY_QUIET_MS, 0);
@@ -100,6 +123,19 @@ async function waitForPageActionStability(page, plan = {}, options = {}) {
   let stableSinceMs = 0;
   let stablePolls = 0;
   let attempts = 0;
+  const page = resolvePageForStability(pageOrRuntime);
+  if (!page) {
+    return {
+      status: 'timeout',
+      reason: 'runtime_page_missing',
+      durationMs: 0,
+      attempts,
+      selectors,
+      stablePolls,
+      quietMs,
+      snapshot: null,
+    };
+  }
 
   while (Date.now() - startedAtMs <= timeoutMs) {
     attempts += 1;
