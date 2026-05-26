@@ -1,4 +1,4 @@
-const { getCdpEndpoint } = require('../../../scripts/lib/helpers');
+const { getCdpEndpoint } = require('../config/browserless-runtime-config');
 const { BrowserlessSession } = require('./browserless-session');
 
 const DEFAULT_ROUTE = '/stealth';
