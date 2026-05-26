@@ -32,7 +32,7 @@ StayAuthed has been tested against Cloudflare Turnstile behavior using the publi
 https://browser-compat.turnstile.workers.dev/
 ```
 
-The run below is generated from real captured screenshots during Browserless auto-mode Turnstile handling:
+The run below is generated from real captured screenshots:
 
 ![Cloudflare Turnstile auto-mode frames](docs/research/turnstile/assets/cloudflare-turnstile-auto-mode-frames.gif)
 
@@ -42,9 +42,9 @@ It has also completed a real HealthEquity-style login workflow against:
 https://my.healthequity.com/ClientLogin.aspx
 ```
 
-The GIF below was generated from all screenshots in one captured run. Sensitive account details are redacted:
+The animation below was generated from all screenshots in one captured run:
 
-![HealthEquity login workflow, redacted](docs/research/login/assets/healthequity-login-run-redacted.gif)
+![HealthEquity login workflow](docs/research/login/assets/healthequity-login-run-animated.png)
 
 Observed result from a captured run:
 
