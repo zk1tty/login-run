@@ -4,6 +4,7 @@ const {
   PuppeteerKeepAliveProbe,
   buildProbeCheckpoint,
 } = require('../puppeteer/keepalive-probe');
+const { LoginRun } = require('../../login/login-run');
 
 const CUSTOMER_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
 
@@ -117,24 +118,7 @@ function buildCheckpointFromResult(result = {}) {
 }
 
 function publicRun(run) {
-  const nextActions =
-    run.status === 'waiting_input' && run.state === 'need_otp'
-      ? ['otp']
-      : [];
-
-  return {
-    runId: run.runId,
-    customerId: run.customerId,
-    targetUrl: run.targetUrl,
-    status: run.status,
-    state: run.state,
-    nextActions,
-    result: run.result,
-    error: run.error,
-    createdAt: run.createdAt,
-    updatedAt: run.updatedAt,
-    completedAt: run.completedAt || null,
-  };
+  return run.toPublicJson();
 }
 
 function createLoginRunService(options = {}) {
@@ -173,61 +157,34 @@ function createLoginRunService(options = {}) {
     }
   }
 
-  function updateRun(run, patch, eventType = 'login.updated') {
-    Object.assign(run, patch, {
-      updatedAt: now(),
-    });
-    emit(run, eventType);
-  }
-
   function finishFromResult(run, result) {
-    run.private.checkpoint = buildCheckpointFromResult(result);
+    const checkpoint = buildCheckpointFromResult(result);
     const sanitizedResult = sanitizeProbeResult(result);
 
     if (isAuthedResult(result)) {
-      updateRun(
-        run,
-        {
-          status: 'succeeded',
-          state: 'authed',
-          result: sanitizedResult,
-          error: null,
-          completedAt: now(),
-        },
-        'login.completed'
-      );
+      run.markSucceeded(now(), sanitizedResult, checkpoint);
+      emit(run, 'login.completed');
       return;
     }
 
     if (isNeedOtpResult(result)) {
-      updateRun(
-        run,
-        {
-          status: 'waiting_input',
-          state: 'need_otp',
-          result: sanitizedResult,
-          error: null,
-          completedAt: null,
-        },
-        'login.waiting_input'
-      );
+      run.markWaitingForOtp(now(), sanitizedResult, checkpoint);
+      emit(run, 'login.waiting_input');
       return;
     }
 
-    updateRun(
-      run,
+    run.markFailed(
+      now(),
       {
-        status: 'failed',
-        state: 'failed',
-        result: sanitizedResult,
-        error: {
-          message: 'Login automation did not reach an authenticated or OTP state.',
-          stage: sanitizedResult.stage,
-        },
-        completedAt: now(),
+        message: 'Login automation did not reach an authenticated or OTP state.',
+        stage: sanitizedResult.stage,
       },
-      'login.failed'
+      {
+        result: sanitizedResult,
+        checkpoint,
+      }
     );
+    emit(run, 'login.failed');
   }
 
   async function runPhase1(run, input) {
@@ -251,21 +208,18 @@ function createLoginRunService(options = {}) {
       });
       finishFromResult(run, result);
     } catch (error) {
-      updateRun(
-        run,
+      run.markFailed(
+        now(),
         {
-          status: 'failed',
-          state: 'failed',
-          result: null,
-          error: {
-            message: String(error?.message || error || 'unknown_error'),
-          },
-          completedAt: now(),
+          message: String(error?.message || error || 'unknown_error'),
         },
-        'login.failed'
+        {
+          result: null,
+        }
       );
+      emit(run, 'login.failed');
     } finally {
-      run.private.activeTask = null;
+      run.setActiveTask(null);
     }
   }
 
@@ -273,7 +227,7 @@ function createLoginRunService(options = {}) {
     try {
       const result = await probe.run({
         phase: 'reconnect',
-        checkpoint: run.private.checkpoint,
+        checkpoint: run.getCheckpoint(),
         ttlMs,
         processKeepAliveMs,
         connectTimeoutMs,
@@ -290,21 +244,18 @@ function createLoginRunService(options = {}) {
       });
       finishFromResult(run, result);
     } catch (error) {
-      updateRun(
-        run,
+      run.markFailed(
+        now(),
         {
-          status: 'failed',
-          state: 'failed',
-          result: null,
-          error: {
-            message: String(error?.message || error || 'unknown_error'),
-          },
-          completedAt: now(),
+          message: String(error?.message || error || 'unknown_error'),
         },
-        'login.failed'
+        {
+          result: null,
+        }
       );
+      emit(run, 'login.failed');
     } finally {
-      run.private.activeTask = null;
+      run.setActiveTask(null);
     }
   }
 
@@ -315,30 +266,22 @@ function createLoginRunService(options = {}) {
     const password = normalizeRequiredString(input.password, 'password');
     const runId = idFactory();
     const timestamp = now();
-    const run = {
+    const run = new LoginRun({
       runId,
       customerId,
       targetUrl,
-      status: 'running',
-      state: 'authing',
-      result: null,
-      error: null,
-      createdAt: timestamp,
-      updatedAt: timestamp,
-      completedAt: null,
-      private: {
-        checkpoint: null,
-        activeTask: null,
-      },
-    };
+      now: timestamp,
+    });
 
     runs.set(runId, run);
-    run.private.activeTask = runPhase1(run, {
-      targetUrl,
-      username,
-      password,
-      otpDeliverySelection: String(input.otpDeliverySelection || 'email').trim() || 'email',
-    });
+    run.setActiveTask(
+      runPhase1(run, {
+        targetUrl,
+        username,
+        password,
+        otpDeliverySelection: String(input.otpDeliverySelection || 'email').trim() || 'email',
+      })
+    );
     emit(run, 'login.updated');
 
     return publicRun(run);
@@ -348,23 +291,21 @@ function createLoginRunService(options = {}) {
     const run = getRunOrThrow(runId);
     const code = normalizeRequiredString(input.code, 'code');
 
-    if (run.status === 'running') {
+    if (run.getStatus() === 'running') {
       throw createHttpError(409, 'Login run is already running.');
     }
-    if (run.status !== 'waiting_input' || run.state !== 'need_otp') {
+    if (run.getStatus() !== 'waiting_input' || run.getState() !== 'need_otp') {
       throw createHttpError(409, 'Login run is not waiting for OTP.');
     }
-    if (!run.private.checkpoint?.session?.connect) {
+    if (!run.getCheckpoint()?.session?.connect) {
       throw createHttpError(409, 'Login run is missing a resumable session checkpoint.');
     }
 
-    updateRun(run, {
-      status: 'running',
-      state: 'authing',
+    run.markRunning(now(), {
       error: null,
-      completedAt: null,
     });
-    run.private.activeTask = runPhase2(run, code);
+    emit(run, 'login.updated');
+    run.setActiveTask(runPhase2(run, code));
 
     return publicRun(run);
   }
@@ -393,7 +334,7 @@ function createLoginRunService(options = {}) {
 
   async function whenSettled(runId) {
     const run = getRunOrThrow(runId);
-    const task = run.private.activeTask;
+    const task = run.getActiveTask();
     if (task) {
       await task;
     }
@@ -403,7 +344,7 @@ function createLoginRunService(options = {}) {
   async function close() {
     await Promise.allSettled(
       Array.from(runs.values())
-        .map(run => run.private.activeTask)
+        .map(run => run.getActiveTask())
         .filter(Boolean)
     );
     subscribers.clear();
