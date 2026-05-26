@@ -8,6 +8,7 @@
     "login:probe:concurrency": "node scripts/puppeteer-login/keepalive-concurrency-probe.js",
     "otp:gmail:init": "node scripts/puppeteer-login/gmail-oauth-init.js",
     "otp:gmail:watcher": "node scripts/puppeteer-login/gmail-otp-to-file.js",
+    "typecheck": "tsc --noEmit",
     "start:bl-server": "node src/server.js",
     "dev:bl-server": "node --watch src/server.js",
     "test": "node --test"
@@ -23,6 +24,8 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "eslint": "^10.4.0"
+    "@types/node": "^25.9.1",
+    "eslint": "^10.4.0",
+    "typescript": "^6.0.3"
   }
 }
