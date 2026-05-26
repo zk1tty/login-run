@@ -2,7 +2,6 @@ const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright-core');
 
-const { waitForPageReady } = require('../../../scripts/lib/helpers');
 const { toTimestampTag } = require('../utils/time');
 const {
   inspectRuntimeInventory,
@@ -74,6 +73,53 @@ function parseWorkflowPhase(value) {
     throw new Error('LOGIN_PHASE must be "1" or "2".');
   }
   return phase;
+}
+
+function getBootstrapReadyTimeoutMs() {
+  const value = Number(process.env.AUTH_BOOTSTRAP_READY_TIMEOUT_MS || 30000);
+  return Number.isFinite(value) && value >= 0 ? value : 30000;
+}
+
+function getBootstrapReadySelector() {
+  return process.env.AUTH_BOOTSTRAP_READY_SELECTOR || '';
+}
+
+function getBootstrapRenderWaitMs() {
+  const value = Number(process.env.AUTH_BOOTSTRAP_RENDER_WAIT_MS || 1500);
+  return Number.isFinite(value) && value >= 0 ? value : 1500;
+}
+
+async function waitForPageReady(page, options = {}) {
+  const timeout = options.timeout ?? getBootstrapReadyTimeoutMs();
+  const selector = options.selector ?? getBootstrapReadySelector();
+  const renderWaitMs = options.renderWaitMs ?? getBootstrapRenderWaitMs();
+
+  await page.waitForLoadState('domcontentloaded', { timeout });
+  await page.waitForLoadState('load', { timeout });
+
+  try {
+    await page.waitForLoadState('networkidle', { timeout: Math.min(timeout, 10000) });
+  } catch (error) {
+    // Modern apps often keep background requests open, so treat this as best effort.
+  }
+
+  if (selector) {
+    await page.waitForSelector(selector, { state: 'visible', timeout });
+  }
+
+  await page.waitForFunction(() => document.readyState === 'complete', null, { timeout });
+
+  await page.evaluate(async () => {
+    if (document.fonts && document.fonts.ready) {
+      await document.fonts.ready;
+    }
+
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+
+  if (renderWaitMs > 0) {
+    await page.waitForTimeout(renderWaitMs);
+  }
 }
 
 function appendJsonLine(filePath, value) {
