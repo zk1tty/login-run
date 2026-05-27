@@ -105,12 +105,15 @@ bun test
 
 ### 7. API Boundary
 
-- [ ] Convert `src/core/run/login-run-service.js` to TypeScript.
+- [x] Convert `src/core/run/login-run-service.js` to TypeScript.
   - Use `LoginRun`, `LoginRunService`, `StartLoginRequest`, and `SubmitOtpRequest` contracts directly.
-- [ ] Convert `src/api/routes/login-routes.js` to TypeScript.
+  - Implementation moved to `src/core/run/login-run-service.ts` with JS compatibility bridge.
+- [x] Convert `src/api/routes/login-routes.js` to TypeScript.
   - Type Fastify params/body/reply handlers.
   - Keep SSE events and response payloads unchanged.
-- [ ] Convert `src/api/app.js` and `src/api/server.js` to TypeScript if the runtime/build decision supports it.
+  - Implementation moved to `src/api/routes/login-routes.ts` with JS compatibility bridge.
+- [x] Convert `src/api/app.js` and `src/api/server.js` to TypeScript where runtime is Bun-compatible.
+  - Added `src/api/app.ts`, `src/api/server.ts` and JS bridge files.
 
 ### 8. Tests
 
