@@ -131,7 +131,7 @@ test('GET /demo serves the login lifecycle demo page', async () => {
 
   assert.equal(response.statusCode, 200);
   assert.match(String(response.headers['content-type']), /text\/html/);
-  assert.match(response.body, /Login Lifecycle Demo/);
+  assert.match(response.body, /Login Run/);
   assert.match(response.body, /\/demo\/app\.js/);
 
   await app.close();

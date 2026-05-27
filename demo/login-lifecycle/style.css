@@ -97,7 +97,7 @@ h2 {
 .status-pill {
   min-width: 110px;
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: 2px;
   background: var(--panel);
   padding: 8px 12px;
   text-align: center;
