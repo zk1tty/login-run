@@ -662,3 +662,28 @@ test('failed probe maps to failed run status', async () => {
 
   await service.close();
 });
+
+test('failed probe redacts Browserless URLs from public error payload', async () => {
+  const service = createLoginRunService({
+    probe: createFakeProbe(new Error(
+      "WebSocket connection to 'wss://production-sfo.browserless.io/e/encrypted/session/connect/session-1?token=secret-token&proxy=residential' failed: Expected 101 status code"
+    )),
+    idFactory: () => 'login_failed_redacted',
+  });
+
+  service.startLogin({
+    customerId: 'danny',
+    targetUrl: 'https://example.com/login',
+    username: 'user@example.com',
+    password: 'secret',
+  });
+  const run = await service.whenSettled('login_failed_redacted');
+
+  assert.equal(run.status, 'failed');
+  assert.match(run.error.message, /Expected 101 status code/);
+  assert.doesNotMatch(run.error.message, /secret-token/);
+  assert.doesNotMatch(run.error.message, /\/e\/encrypted/);
+  assert.match(run.error.message, /token=%5Bredacted%5D|token=\[redacted\]/);
+
+  await service.close();
+});

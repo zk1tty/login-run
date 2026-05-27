@@ -30,6 +30,9 @@ const { PuppeteerKeepAliveProbe, buildProbeCheckpoint } = require('../puppeteer/
   PuppeteerKeepAliveProbe: new (input?: UnknownRecord) => LoginRunServiceProbe;
   buildProbeCheckpoint: (input: UnknownRecord) => LoginRunCheckpoint;
 };
+const { redactUrlSecretParams } = require('../browserless/browserless-session') as {
+  redactUrlSecretParams: (urlString: string | null | undefined) => string;
+};
 
 interface LoginRunServiceOptions {
   probe?: LoginRunServiceProbe;
@@ -119,6 +122,14 @@ function createHttpError(statusCode: number, message: string): HttpError {
   const error = new Error(message) as HttpError;
   error.statusCode = statusCode;
   return error;
+}
+
+function sanitizeErrorMessage(value: unknown): string {
+  const message = toStringValue((value as { message?: unknown })?.message || value);
+  return message.replace(
+    /\b(?:wss?|https?):\/\/[^\s"'<>]+/gi,
+    match => redactUrlSecretParams(match)
+  );
 }
 
 function normalizeRequiredString(value: unknown, fieldName: string): string {
@@ -596,7 +607,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       run.markFailed(
         now(),
         {
-          message: toStringValue((error as { message?: unknown })?.message || error),
+          message: sanitizeErrorMessage(error),
         },
         {
           result: null,
@@ -637,7 +648,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       run.markFailed(
         now(),
         {
-          message: toStringValue((error as { message?: unknown })?.message || error),
+          message: sanitizeErrorMessage(error),
         },
         {
           result: null,
@@ -678,7 +689,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       run.markFailed(
         now(),
         {
-          message: toStringValue((error as { message?: unknown })?.message || error),
+          message: sanitizeErrorMessage(error),
         },
         {
           result: null,

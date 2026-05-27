@@ -2,7 +2,7 @@ const { buildApp } = require('./app');
 
 async function start(): Promise<void> {
   const app = buildApp();
-  const port = Number(process.env.PUPPETEER_API_PORT || 8787);
+  const port = Number(process.env.PORT || process.env.PUPPETEER_API_PORT || 8787);
   const host = process.env.PUPPETEER_API_HOST || '0.0.0.0';
 
   try {
