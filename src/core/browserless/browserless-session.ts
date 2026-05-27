@@ -56,6 +56,9 @@ function toBool(value: unknown, fallback = false): boolean {
 }
 
 function toInt(value: unknown, fallback: number, minimum = 0): number {
+  if (value == null || value === '') {
+    return fallback;
+  }
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) {
     return fallback;

@@ -604,6 +604,9 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       }) as LoginRunServiceResult;
       finishFromResult(run, result);
     } catch (error: unknown) {
+      recordProbeEvent(run, 'bootstrap', 'probe_error', {
+        message: sanitizeErrorMessage(error),
+      });
       run.markFailed(
         now(),
         {
@@ -645,6 +648,9 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       }) as LoginRunServiceResult;
       finishFromResult(run, result);
     } catch (error: unknown) {
+      recordProbeEvent(run, 'reconnect', 'probe_error', {
+        message: sanitizeErrorMessage(error),
+      });
       run.markFailed(
         now(),
         {
@@ -686,6 +692,9 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       }) as LoginRunServiceResult;
       finishFromResult(run, result);
     } catch (error: unknown) {
+      recordProbeEvent(run, 'reconnect', 'probe_error', {
+        message: sanitizeErrorMessage(error),
+      });
       run.markFailed(
         now(),
         {

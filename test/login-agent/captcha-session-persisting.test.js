@@ -129,6 +129,33 @@ test('buildSessionPayload uses stealth session with nested proxy object', () => 
   }
 });
 
+test('buildSessionPayload treats empty numeric env values as defaults', () => {
+  const previous = {
+    SESSION_API_TTL_MS: process.env.SESSION_API_TTL_MS,
+    SESSION_API_PROCESS_KEEP_ALIVE_MS: process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS,
+    SESSION_API_PAYLOAD_JSON: process.env.SESSION_API_PAYLOAD_JSON,
+  };
+
+  process.env.SESSION_API_TTL_MS = '';
+  process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS = '';
+  delete process.env.SESSION_API_PAYLOAD_JSON;
+
+  try {
+    const payload = buildSessionPayload();
+
+    assert.equal(payload.ttl, 180000);
+    assert.equal('processKeepAlive' in payload, false);
+  } finally {
+    for (const [key, value] of Object.entries(previous)) {
+      if (value == null) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
+});
+
 test('redactUrlSecretParams removes token and session id', () => {
   const redacted = redactUrlSecretParams(
     'wss://production-sfo.browserless.io/session/connect/abc?token=secret&solveCaptchas=true'

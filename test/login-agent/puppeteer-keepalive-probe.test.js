@@ -345,6 +345,63 @@ test('PuppeteerKeepAliveProbe creates session when checkpoint is absent and disc
   assert.equal(disconnectCalls, 1);
 });
 
+test('PuppeteerKeepAliveProbe tolerates detached frame during initial navigation', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keepalive-probe-detached-frame-'));
+  const page = createEvaluatePageStub();
+  let gotoCalls = 0;
+  page.goto = async function goto(url, options) {
+    gotoCalls += 1;
+    this._lastGoto = { url, options };
+    throw new Error('Navigating frame was detached');
+  };
+  const probe = new PuppeteerKeepAliveProbe({
+    async createSession() {
+      return {
+        session: {
+          id: 'session-1',
+          connect: 'wss://example.com/session/connect/session-1',
+          stop: 'https://example.com/session/session-1',
+          ttlMs: 1000,
+          processKeepAliveMs: 500,
+        },
+        toRecord() {
+          return { session: this.session };
+        },
+      };
+    },
+    async connectRuntime() {
+      return {
+        connectTimeoutMs: 60000,
+        page,
+        browser: {
+          async pages() {
+            return [page];
+          },
+        },
+        toRecord() {
+          return { runtime: 'puppeteer' };
+        },
+        async disconnect() {},
+      };
+    },
+    readCheckpoint() {
+      return null;
+    },
+  });
+
+  const result = await probe.run({
+    targetUrl: 'https://example.com/login',
+    waitMs: 0,
+    screenshotsDir: tmpDir,
+    inventoriesDir: tmpDir,
+  });
+
+  assert.equal(gotoCalls, 1);
+  assert.equal(result.status, undefined);
+  assert.equal(result.capture.stage.state, 'authed');
+  assert.equal(fs.existsSync(result.capture.screenshotPath), true);
+});
+
 test('PuppeteerKeepAliveProbe reuses checkpoint session without creating a new session', async () => {
   let createCalls = 0;
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keepalive-probe-reconnect-'));

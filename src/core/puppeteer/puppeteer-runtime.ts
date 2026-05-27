@@ -11,6 +11,9 @@ import type {
 const { adaptPuppeteerPage }: {
   adaptPuppeteerPage: (page: PuppeteerPageLike | null) => PuppeteerPageAdapterLike | null;
 } = require('./page-adapter.ts');
+const { redactUrlSecretParams }: {
+  redactUrlSecretParams: (urlString: string | null | undefined) => string;
+} = require('../browserless/browserless-session');
 
 type PuppeteerConnectOptions = Required<Pick<PuppeteerConnectInput, 'endpoint'>> & PuppeteerConnectInput;
 type PuppeteerLike = {
@@ -31,6 +34,10 @@ function toInt(value: unknown, fallback: number, minimum = 0): number {
 
 function toErrorMessage(error: unknown): string {
   return String((error as { message?: unknown })?.message || error || 'unknown_error');
+}
+
+function isDetachedFrameNavigationError(error: unknown): boolean {
+  return /navigating frame was detached|frame was detached/i.test(toErrorMessage(error));
 }
 
 function loadPuppeteer(input: PuppeteerConnectInput = {}): PuppeteerLike {
@@ -153,7 +160,17 @@ class PuppeteerRuntime {
     if (!this.page || typeof this.page.goto !== 'function') {
       throw new Error('Puppeteer runtime has no active page.');
     }
-    return this.page.goto(url, options);
+    try {
+      return await this.page.goto(url, options);
+    } catch (error) {
+      if (!isDetachedFrameNavigationError(error) || !this.browser || typeof this.browser.pages !== 'function') {
+        throw error;
+      }
+
+      this.page = await pickActivePage(this.browser);
+      this._driverPage = null;
+      return null;
+    }
   }
 
   async listPages(): Promise<PuppeteerPageLike[]> {
@@ -171,7 +188,7 @@ class PuppeteerRuntime {
   toRecord(): PuppeteerRuntimeRecord {
     return {
       runtime: 'puppeteer-runtime',
-      endpoint: this.endpoint,
+      endpoint: redactUrlSecretParams(this.endpoint),
       hasBrowser: Boolean(this.browser),
       hasPage: Boolean(this.page),
       hasCdp: Boolean(this.cdp),
@@ -192,4 +209,4 @@ class PuppeteerRuntime {
   }
 }
 
-export { PuppeteerRuntime, loadPuppeteer, pickActivePage };
+export { PuppeteerRuntime, isDetachedFrameNavigationError, loadPuppeteer, pickActivePage };

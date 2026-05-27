@@ -10,6 +10,7 @@ const {
 const { planRuntimeAction } = require('../workflow/action-planner');
 const { executeRuntimeAction } = require('../workflow/action-executor');
 const { BrowserlessSessionClient } = require('../browserless/browserless-session-client');
+const { redactUrlSecretParams } = require('../browserless/browserless-session');
 const { PuppeteerRuntime } = require('./puppeteer-runtime');
 const { adaptPuppeteerPage } = require('./page-adapter');
 
@@ -23,6 +24,14 @@ function toInt(value, fallback, minimum = 0) {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function toErrorMessage(error) {
+  return String(error?.message || error || 'unknown_error');
+}
+
+function isDetachedFrameNavigationError(error) {
+  return /navigating frame was detached|frame was detached/i.test(toErrorMessage(error));
 }
 
 function normalizeSessionHandle(input, checkpointFallback = {}) {
@@ -93,7 +102,13 @@ function normalizeRuntimeInstance(input) {
       if (!this.page || typeof this.page.goto !== 'function') {
         throw new Error('Puppeteer runtime has no active page.');
       }
-      await this.page.goto(url, options);
+      try {
+        await this.page.goto(url, options);
+      } catch (error) {
+        if (!isDetachedFrameNavigationError(error)) {
+          throw error;
+        }
+      }
     },
     async listPages() {
       if (!pagesMethod) {
@@ -122,7 +137,7 @@ function normalizeRuntimeInstance(input) {
     toRecord() {
       return {
         runtime: 'puppeteer',
-        endpoint: runtimeEndpoint,
+        endpoint: redactUrlSecretParams(runtimeEndpoint),
         hasBrowser: Boolean(browser),
         hasPage: Boolean(rawPage),
         hasCdp: Boolean(input.cdp),
@@ -475,6 +490,7 @@ class PuppeteerKeepAliveProbe {
   async run(input = {}) {
     const checkpoint = input.checkpoint || this.readCheckpoint(input.checkpointPath);
     const phase = parseProbePhase(input.phase, checkpoint);
+    const recordEvent = typeof input.recordEvent === 'function' ? input.recordEvent : null;
     let sessionHandle = normalizeSessionHandle(input.session || checkpoint?.session, {});
     let sessionCreated = false;
     let sessionRecord = null;
@@ -499,6 +515,23 @@ class PuppeteerKeepAliveProbe {
       throw new Error('Puppeteer keep-alive probe requires session.connect.');
     }
 
+    if (recordEvent) {
+      recordEvent(sessionCreated ? 'session_created' : 'session_reused', {
+        session: {
+          id: sessionHandle.id,
+          hasConnect: sessionHandle.hasConnect(),
+          hasStop: Boolean(sessionHandle.stopUrl),
+          ttlMs: sessionHandle.ttlMs || 0,
+          processKeepAliveMs: sessionHandle.processKeepAliveMs || 0,
+        },
+        sessionCreated,
+      });
+      recordEvent('runtime_connect_start', {
+        endpoint: sessionHandle.toRuntimeRedactedLogUrl(),
+        connectTimeoutMs: input.connectTimeoutMs,
+      });
+    }
+
     const runtime = normalizeRuntimeInstance(await this.connectRuntime({
       endpoint: sessionHandle.connectUrl,
       connectTimeoutMs: input.connectTimeoutMs,
@@ -516,7 +549,6 @@ class PuppeteerKeepAliveProbe {
     const reconnectNavigate = input.reconnectNavigate === true;
     const screenshotsDir = String(input.screenshotsDir || '');
     const inventoriesDir = String(input.inventoriesDir || '');
-    const recordEvent = typeof input.recordEvent === 'function' ? input.recordEvent : null;
     const workflowEnabled = input.workflowEnabled !== false;
     const maxActions = toInt(input.maxActions, 8, 1);
     const actionWaitMs = toInt(input.actionWaitMs, 5000, 0);
@@ -532,18 +564,6 @@ class PuppeteerKeepAliveProbe {
     }
 
     try {
-      if (recordEvent) {
-        recordEvent(sessionCreated ? 'session_created' : 'session_reused', {
-          session: {
-            id: sessionHandle.id,
-            hasConnect: sessionHandle.hasConnect(),
-            hasStop: Boolean(sessionHandle.stopUrl),
-            ttlMs: sessionHandle.ttlMs || 0,
-            processKeepAliveMs: sessionHandle.processKeepAliveMs || 0,
-          },
-          sessionCreated,
-        });
-      }
       if (recordEvent) {
         recordEvent('runtime_connected', {
           runtime: runtime.toRecord(),
@@ -571,6 +591,10 @@ class PuppeteerKeepAliveProbe {
             url: await runtime.getCurrentUrl(),
             title: await runtime.getCurrentTitle(),
           });
+        }
+        const refreshedDriverPage = runtime.getDriverPage();
+        if (!refreshedDriverPage) {
+          throw new Error('Puppeteer keep-alive probe requires a driver-ready runtime page after navigation.');
         }
       }
       if (waitMs > 0) {
