@@ -69,7 +69,14 @@ function createEvaluatePageStub(input = {}) {
     async title() {
       return store.title;
     },
-    async screenshot({ path: screenshotPath }) {
+    async setViewport(viewport) {
+      store.viewport = viewport;
+    },
+    async screenshot(options) {
+      const screenshotPath = options.path;
+      if (input.failFullPageScreenshotWithZeroWidth === true && options.fullPage === true) {
+        throw new Error('Protocol error (Page.captureScreenshot): Cannot take screenshot with 0 width.');
+      }
       fs.writeFileSync(screenshotPath, 'fake-image');
     },
     async click(selector) {
@@ -830,6 +837,154 @@ test('PuppeteerKeepAliveProbe waits for OTP file and submits the code', async ()
   assert.equal(result.workflow.actions.length, 1);
   assert.equal(result.workflow.actions[0].plan.payloadKey, 'OTP_CODE');
   assert.equal(result.workflow.actions[0].result.status, 'ok');
+});
+
+test('PuppeteerKeepAliveProbe does not submit OTP twice while waiting for post-submit transition', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keepalive-probe-otp-transition-'));
+  const otpCandidates = [
+    {
+      selector: '#otpCode',
+      index: 0,
+      tag: 'input',
+      type: 'text',
+      role: '',
+      text: '',
+      label: ['Confirmation code'],
+      ariaLabel: '',
+      id: 'otpCode',
+      name: 'otpCode',
+      placeholder: '',
+      autocomplete: '',
+      inputMode: '',
+      options: [],
+      visible: true,
+      disabled: false,
+      focusable: true,
+      valueLength: 0,
+      boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+    },
+    {
+      selector: '#verifyOtp',
+      index: 1,
+      tag: 'button',
+      type: 'submit',
+      role: '',
+      text: 'Verify',
+      label: [],
+      ariaLabel: '',
+      id: 'verifyOtp',
+      name: '',
+      placeholder: '',
+      autocomplete: '',
+      inputMode: '',
+      options: [],
+      visible: true,
+      disabled: false,
+      focusable: true,
+      valueLength: 0,
+      boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+    },
+  ];
+  const authedCandidates = [
+    {
+      selector: '#signOut',
+      index: 0,
+      tag: 'a',
+      type: '',
+      role: '',
+      text: 'Sign Out',
+      label: [],
+      ariaLabel: '',
+      id: 'signOut',
+      name: '',
+      placeholder: '',
+      autocomplete: '',
+      inputMode: '',
+      options: [],
+      visible: true,
+      disabled: false,
+      focusable: true,
+      valueLength: 0,
+      boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+    },
+  ];
+  const page = createEvaluatePageStub({
+    url: 'https://example.com/otp',
+    title: 'Verify',
+    text: 'Account Balance',
+    failFullPageScreenshotWithZeroWidth: true,
+    candidatesByCall: [
+      otpCandidates,
+      otpCandidates.map(candidate =>
+        candidate.selector === '#otpCode'
+          ? { ...candidate, valueLength: 6 }
+          : candidate
+      ),
+      authedCandidates,
+    ],
+  });
+  const probe = new PuppeteerKeepAliveProbe({
+    async createSession() {
+      return {
+        session: {
+          id: 'session-1',
+          connect: 'wss://example.com/session/connect/session-1',
+          stop: 'https://example.com/session/session-1',
+          ttlMs: 1000,
+          processKeepAliveMs: 500,
+        },
+        toRecord() {
+          return { session: this.session };
+        },
+      };
+    },
+    async connectRuntime() {
+      return {
+        connectTimeoutMs: 60000,
+        page,
+        browser: {
+          async pages() {
+            return [1];
+          },
+        },
+        toRecord() {
+          return { runtime: 'puppeteer' };
+        },
+        async disconnect() {},
+      };
+    },
+    readCheckpoint() {
+      return null;
+    },
+  });
+
+  const events = [];
+  const result = await probe.run({
+    targetUrl: 'https://example.com/otp',
+    waitMs: 0,
+    workflowEnabled: true,
+    maxActions: 3,
+    actionWaitMs: 0,
+    payload: {
+      OTP_CODE: '654321',
+    },
+    screenshotsDir: tmpDir,
+    inventoriesDir: tmpDir,
+    recordEvent(name, detail) {
+      events.push({ name, detail });
+    },
+  });
+
+  assert.equal(result.workflow.actions.length, 1);
+  assert.equal(result.workflow.actions[0].plan.payloadKey, 'OTP_CODE');
+  assert.equal(result.workflow.actions[0].result.status, 'ok');
+  assert.equal(result.workflow.terminalOutcome, 'authed');
+  assert.equal(result.workflow.finalStage.state, 'authed');
+  assert.equal(fs.existsSync(path.join(tmpDir, '0003-post-otp-wait-1.png')), true);
+  assert.equal(
+    events.some(event => event.name === 'runtime_action_transition_after_otp'),
+    true
+  );
 });
 
 test('runPuppeteerKeepAliveProbeCli writes summary and checkpoint artifacts', async () => {

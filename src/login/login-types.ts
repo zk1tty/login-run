@@ -10,11 +10,15 @@ export type LoginRunState =
   | "authed"
   | "failed";
 
-export type LoginEventType =
+export type LoginRunLifecycleEventType =
   | "login.updated"
   | "login.waiting_input"
   | "login.completed"
   | "login.failed";
+
+export type LoginEventType =
+  | LoginRunLifecycleEventType
+  | "login.screenshot";
 
 export type LoginNextAction = "otp";
 
@@ -36,6 +40,10 @@ export interface LoginRunAcceptedResponse {
   state: LoginRunState;
   statusUrl: string;
   eventsUrl: string;
+}
+
+export interface LoginRunListResponse {
+  runs: PublicLoginRun[];
 }
 
 export interface LoginStageSnapshot {
@@ -81,10 +89,41 @@ export interface PublicLoginRun {
   completedAt: string | null;
 }
 
-export interface LoginEvent {
-  type: LoginEventType;
+export interface LoginScreenshotArtifact {
+  fileName: string;
+  label: string;
+  createdAt: string;
+  url: string;
+}
+
+export interface LoginScreenshotEventData extends LoginScreenshotArtifact {
+  runId: string;
+  phase: string;
+  sequence: number;
+}
+
+export interface LoginScreenshotArtifactList {
+  runId: string;
+  screenshots: LoginScreenshotArtifact[];
+}
+
+export interface LoginScreenshotArtifactFile {
+  fileName: string;
+  contentType: string;
+  buffer: Buffer;
+}
+
+export interface LoginRunEvent {
+  type: LoginRunLifecycleEventType;
   data: PublicLoginRun;
 }
+
+export interface LoginScreenshotEvent {
+  type: "login.screenshot";
+  data: LoginScreenshotEventData;
+}
+
+export type LoginEvent = LoginRunEvent | LoginScreenshotEvent;
 
 export interface BrowserlessCheckpointSession {
   id?: string;
@@ -128,7 +167,11 @@ export type LoginEventListener = (event: LoginEvent) => void;
 export interface LoginRunService {
   startLogin(input: StartLoginRequest): PublicLoginRun;
   submitOtp(runId: string, input: SubmitOtpRequest): PublicLoginRun;
+  reconnect(runId: string): PublicLoginRun;
+  listRuns(): LoginRunListResponse;
   getRun(runId: string): PublicLoginRun;
+  listScreenshots(runId: string): LoginScreenshotArtifactList;
+  getScreenshot(runId: string, fileName: string): LoginScreenshotArtifactFile;
   subscribe(runId: string, listener: LoginEventListener): () => void;
   whenSettled(runId: string): Promise<PublicLoginRun>;
   close(): Promise<void>;

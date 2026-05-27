@@ -1,8 +1,121 @@
 const assert = require('node:assert/strict');
 const test = require('node:test');
 
-const { classifyRuntimeStage } = require('../../src/core/workflow/runtime-inventory');
+const {
+  classifyRuntimeStage,
+  inspectRuntimeInventory,
+} = require('../../src/core/workflow/runtime-inventory');
 const { planRuntimeAction } = require('../../src/core/workflow/action-planner');
+
+function createElement(input = {}) {
+  const attrs = input.attrs || {};
+  return {
+    tagName: input.tagName || 'INPUT',
+    textContent: input.textContent || '',
+    value: input.value || '',
+    labels: input.labels || [],
+    options: input.options || [],
+    getAttribute(name) {
+      return attrs[name] ?? null;
+    },
+    hasAttribute(name) {
+      return Object.prototype.hasOwnProperty.call(attrs, name);
+    },
+    getBoundingClientRect() {
+      return input.rect || { x: 10, y: 10, width: 220, height: 38 };
+    },
+    focus() {},
+    closest() {
+      return null;
+    },
+  };
+}
+
+test('runtime inventory extracts login inputs without activeElement initialization error', async () => {
+  const username = createElement({
+    attrs: {
+      id: 'username',
+      name: 'username',
+      type: 'text',
+      autocomplete: 'username',
+    },
+    labels: [{ textContent: 'Username' }],
+  });
+  const password = createElement({
+    attrs: {
+      id: 'password',
+      name: 'password',
+      type: 'password',
+      autocomplete: 'current-password',
+    },
+    labels: [{ textContent: 'Password' }],
+    rect: { x: 10, y: 60, width: 220, height: 38 },
+  });
+  const submit = createElement({
+    tagName: 'BUTTON',
+    textContent: 'Log in',
+    attrs: {
+      id: 'submit',
+      type: 'submit',
+    },
+    rect: { x: 10, y: 110, width: 100, height: 38 },
+  });
+  const previousGlobals = {
+    document: global.document,
+    location: global.location,
+    CSS: global.CSS,
+    getComputedStyle: global.getComputedStyle,
+  };
+
+  global.document = {
+    title: 'Login',
+    body: { innerText: 'Username Password Log in' },
+    activeElement: username,
+    forms: [{}],
+    querySelectorAll() {
+      return [username, password, submit];
+    },
+    querySelector() {
+      return null;
+    },
+  };
+  global.location = {
+    href: 'https://example.com/login',
+  };
+  global.CSS = {
+    escape(value) {
+      return String(value);
+    },
+  };
+  global.getComputedStyle = () => ({
+    display: 'block',
+    visibility: 'visible',
+    opacity: '1',
+  });
+
+  try {
+    const inventory = await inspectRuntimeInventory({
+      async evaluate(pageFunction) {
+        return pageFunction();
+      },
+      locator() {},
+    });
+
+    assert.equal(inventory.error, undefined);
+    assert.equal(inventory.candidates.length, 3);
+    assert.equal(inventory.activeSelector, '#username');
+
+    const stage = classifyRuntimeStage(inventory, { challengeVisible: false });
+    assert.equal(stage.state, 'id+pw');
+    assert.equal(stage.identifierSelector, '#username');
+    assert.equal(stage.passwordSelector, '#password');
+  } finally {
+    global.document = previousGlobals.document;
+    global.location = previousGlobals.location;
+    global.CSS = previousGlobals.CSS;
+    global.getComputedStyle = previousGlobals.getComputedStyle;
+  }
+});
 
 test('runtime classifier treats username-first page as identifier, not otp', () => {
   const inventory = {

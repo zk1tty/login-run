@@ -2,6 +2,7 @@ const assert = require('node:assert/strict');
 const test = require('node:test');
 
 const { executeRuntimeAction } = require('../../src/core/workflow/action-executor');
+const { adaptPuppeteerPage } = require('../../src/core/puppeteer/page-adapter');
 
 class FakeElement {
   constructor(input = {}) {
@@ -227,6 +228,96 @@ test('executor verifies OTP input value after fill before submitting', async t =
   assert.equal(result.submitMethod, 'click');
   assert.equal(result.submitClicked, true);
   assert.equal(fake.submit.clickCount, 1);
+});
+
+test('executor fills through Puppeteer adapter without losing page method binding', async () => {
+  class FakeEvent {
+    constructor(type, init = {}) {
+      this.type = type;
+      this.bubbles = init.bubbles === true;
+    }
+  }
+
+  const inputNode = {
+    id: 'username',
+    value: '',
+    focusCalled: false,
+    eventTypes: [],
+    ownerDocument: {
+      defaultView: {
+        Event: FakeEvent,
+      },
+    },
+    focus() {
+      this.focusCalled = true;
+    },
+    dispatchEvent(event) {
+      if (!(event instanceof FakeEvent)) {
+        throw new Error('dispatchEvent requires Event');
+      }
+      this.eventTypes.push(event.type);
+    },
+  };
+  const submitNode = {
+    disabled: false,
+    hasAttribute(name) {
+      return name === 'disabled' ? this.disabled : false;
+    },
+    getAttribute(name) {
+      return name === 'aria-disabled' ? 'false' : null;
+    },
+  };
+  const page = {
+    nodes: {
+      '#username': inputNode,
+      '#continue': submitNode,
+    },
+    clicked: [],
+    async evaluate() {
+      throw new Error('force_$eval_fallback');
+    },
+    async $eval(selector, fn, ...args) {
+      assert.equal(this, page);
+      const node = this.nodes[selector];
+      if (!node) {
+        throw new Error(`missing selector: ${selector}`);
+      }
+      return fn(node, ...args);
+    },
+    async click(selector) {
+      assert.equal(this, page);
+      this.clicked.push(selector);
+    },
+    async focus() {},
+    keyboard: {
+      async press() {},
+    },
+  };
+  const adapter = adaptPuppeteerPage(page);
+
+  const result = await executeRuntimeAction(
+    adapter,
+    {
+      type: 'fill_input_and_submit',
+      stage: 'identifier',
+      inputSelector: '#username',
+      submitSelector: '#continue',
+      payloadKey: 'LOGIN_USERNAME',
+      shouldSubmit: true,
+    },
+    {
+      LOGIN_USERNAME: 'user@example.com',
+    },
+    {
+      waitMs: 1000,
+    }
+  );
+
+  assert.equal(result.status, 'ok');
+  assert.equal(inputNode.value, 'user@example.com');
+  assert.equal(inputNode.focusCalled, true);
+  assert.deepEqual(inputNode.eventTypes, ['input', 'change']);
+  assert.deepEqual(page.clicked, ['#continue']);
 });
 
 test('executor fails before submit when filled input value does not stick', async t => {
