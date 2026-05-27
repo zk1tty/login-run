@@ -51,6 +51,7 @@ function createEvaluatePageStub(input = {}) {
       },
     },
     inventoryCalls: 0,
+    challengeCalls: 0,
   };
   return {
     _lastGoto: null,
@@ -131,7 +132,18 @@ function createEvaluatePageStub(input = {}) {
     },
     async evaluate(fn) {
       const source = String(fn || '');
-      if (source.includes('challengeVisible')) {
+      if (
+        source.includes('challengeVisible') &&
+        source.includes('hasChallengeText') &&
+        source.includes('hasVerifyingText') &&
+        source.includes('tokenLength')
+      ) {
+        store.challengeCalls += 1;
+        if (Array.isArray(input.challengeSnapshotsByCall)) {
+          return input.challengeSnapshotsByCall[
+            Math.min(store.challengeCalls - 1, input.challengeSnapshotsByCall.length - 1)
+          ];
+        }
         return {
           title: store.title,
           url: store.url,
@@ -739,8 +751,9 @@ test('PuppeteerKeepAliveProbe waits for OTP file and submits the code', async ()
   const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keepalive-probe-otp-wait-'));
   const otpFilePath = path.join(tmpDir, 'otp.txt');
   const page = createEvaluatePageStub({
-    url: 'https://example.com/otp',
-    title: 'Verify',
+    url: 'https://my.healthequity.com/Member/MemberHome.aspx',
+    title: 'Member Portal',
+    text: 'Account Balance',
     text: 'Confirmation code Verify',
     candidatesByCall: [
       [
@@ -1042,6 +1055,122 @@ test('PuppeteerKeepAliveProbe does not submit OTP twice while waiting for post-s
     events.some(event => event.name === 'runtime_action_transition_after_otp'),
     true
   );
+});
+
+test('PuppeteerKeepAliveProbe invokes Browserless captcha solver when OTP phase lands on captcha', async () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'keepalive-probe-otp-captcha-'));
+  let solveCalls = 0;
+  const captchaSnapshot = {
+    title: 'Just a moment...',
+    url: 'https://example.com/otp',
+    iframeCount: 0,
+    tokenLength: 0,
+    hasChallengeText: true,
+    hasVerifyingText: false,
+    hasSecurityCheckPassedText: false,
+    challengeVisible: true,
+  };
+  const clearSnapshot = {
+    ...captchaSnapshot,
+    title: 'Member',
+    hasChallengeText: false,
+    challengeVisible: false,
+  };
+  const page = createEvaluatePageStub({
+    url: 'https://example.com/otp',
+    title: 'Verify',
+    text: 'Confirmation code Verify',
+    challengeSnapshotsByCall: [
+      captchaSnapshot,
+      clearSnapshot,
+    ],
+    candidatesByCall: [
+      [],
+      [
+        {
+          selector: '#signOut',
+          index: 0,
+          tag: 'a',
+          type: '',
+          role: '',
+          text: 'Sign Out',
+          label: [],
+          ariaLabel: '',
+          id: 'signOut',
+          name: '',
+          placeholder: '',
+          autocomplete: '',
+          inputMode: '',
+          options: [],
+          visible: true,
+          disabled: false,
+          focusable: true,
+          valueLength: 0,
+          boundingBox: { x: 0, y: 0, width: 100, height: 20 },
+        },
+      ],
+    ],
+  });
+  const probe = new PuppeteerKeepAliveProbe({
+    async createSession() {
+      return {
+        session: {
+          id: 'session-1',
+          connect: 'wss://example.com/session/connect/session-1',
+          stop: 'https://example.com/session/session-1',
+          ttlMs: 1000,
+          processKeepAliveMs: 500,
+        },
+        toRecord() {
+          return { session: this.session };
+        },
+      };
+    },
+    async connectRuntime() {
+      return {
+        connectTimeoutMs: 60000,
+        page,
+        cdp: {
+          async send(method) {
+            assert.equal(method, 'Browserless.solveCaptcha');
+            solveCalls += 1;
+            return { solved: true };
+          },
+        },
+        browser: {
+          async pages() {
+            return [page];
+          },
+        },
+        toRecord() {
+          return { runtime: 'puppeteer' };
+        },
+        async disconnect() {},
+      };
+    },
+  });
+  const events = [];
+
+  const result = await probe.run({
+    targetUrl: 'https://example.com/otp',
+    waitMs: 0,
+    workflowEnabled: true,
+    maxActions: 3,
+    actionWaitMs: 0,
+    payload: {
+      OTP_CODE: '654321',
+    },
+    screenshotsDir: tmpDir,
+    inventoriesDir: tmpDir,
+    recordEvent(name, detail) {
+      events.push({ name, detail });
+    },
+  });
+
+  assert.equal(solveCalls, 1);
+  assert.equal(events.some(event => event.name === 'captcha_manual_solve_start'), true);
+  assert.equal(events.some(event => event.name === 'captcha_manual_solve_done'), true);
+  assert.equal(events.some(event => event.name === 'runtime_action_transition_after_captcha'), true);
 });
 
 test('runPuppeteerKeepAliveProbeCli writes summary and checkpoint artifacts', async () => {

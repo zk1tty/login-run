@@ -9,6 +9,7 @@ const {
 } = require('../workflow/runtime-inventory');
 const { planRuntimeAction } = require('../workflow/action-planner');
 const { executeRuntimeAction } = require('../workflow/action-executor');
+const { ManualCaptchaSolver } = require('../workflow/manual-captcha-solver');
 const { BrowserlessSessionClient } = require('../browserless/browserless-session-client');
 const { redactUrlSecretParams } = require('../browserless/browserless-session');
 const { PuppeteerRuntime } = require('./puppeteer-runtime');
@@ -88,6 +89,9 @@ function normalizeRuntimeInstance(input) {
     },
     getBrowser() {
       return this.browser;
+    },
+    getCDP() {
+      return input.cdp || null;
     },
     getConnectTimeoutMs() {
       return toInt(connectTimeoutMs, 60000, 1000);
@@ -545,6 +549,7 @@ class PuppeteerKeepAliveProbe {
     const targetUrl = String(
       input.targetUrl || checkpoint?.targetUrl || checkpoint?.currentUrl || ''
     ).trim();
+    const artifactPhase = String(input.artifactPhase || phase).trim() || phase;
     const waitMs = toInt(input.waitMs, 5000, 0);
     const reconnectNavigate = input.reconnectNavigate === true;
     const screenshotsDir = String(input.screenshotsDir || '');
@@ -612,7 +617,7 @@ class PuppeteerKeepAliveProbe {
         pageCount: Array.isArray(pages) ? pages.length : 0,
       };
       const capture = await capturePageArtifacts(runtime, {
-        label: phase,
+        label: artifactPhase,
         screenshotsDir,
         inventoriesDir,
         sequence: artifactSequence++,
@@ -633,6 +638,11 @@ class PuppeteerKeepAliveProbe {
       if (workflowEnabled) {
         let currentStage = capture.stage;
         let currentInventory = capture.inventory;
+        const captchaSolver = new ManualCaptchaSolver({
+          runtime,
+          recordEvent: recordEvent || undefined,
+          timeoutMs: input.captchaSolveTimeoutMs,
+        });
         let otpWaitAttempts = 0;
         let otpFileMinMtimeMs = Date.now();
         const previousOtpCodes = [];
@@ -652,6 +662,11 @@ class PuppeteerKeepAliveProbe {
           }
 
           if (actionPlan.type === 'none') {
+            if (currentStage?.state === 'authed') {
+              workflow.terminalOutcome = 'authed';
+            } else if (currentStage?.state === 'otp_code') {
+              workflow.terminalOutcome = 'need_otp';
+            }
             workflow.actionResult = {
               status: 'skipped',
               reason: actionPlan.reason,
@@ -662,6 +677,33 @@ class PuppeteerKeepAliveProbe {
                 actionIndex,
                 ...workflow.actionResult,
               });
+            }
+            if (actionPlan.detail?.stage === 'captcha' || currentStage?.state === 'captcha') {
+              await captchaSolver.solve('runtime_action_unsupported_captcha');
+              await driverPage.waitForTimeout(Math.min(Math.max(actionWaitMs, 1000), 10000));
+              const captchaCapture = await capturePageArtifacts(runtime, {
+                label: `post-captcha-wait-${actionIndex + 1}`,
+                screenshotsDir,
+                inventoriesDir,
+                sequence: artifactSequence++,
+                recordEvent,
+              });
+              workflow.postActionStage = captchaCapture.stage;
+              workflow.finalStage = captchaCapture.stage;
+              currentStage = captchaCapture.stage;
+              currentInventory = captchaCapture.inventory;
+              if (recordEvent) {
+                recordEvent('runtime_action_transition_after_captcha', {
+                  actionIndex,
+                  nextStage: currentStage,
+                });
+              }
+              if (currentStage?.state === 'authed' || currentStage?.state === 'otp_code') {
+                actionIndex -= 1;
+                continue;
+              }
+              workflow.terminalOutcome =
+                currentStage?.state === 'blocked_or_unknown' ? 'blocked_or_unknown' : 'captcha';
             }
             if (
               actionPlan.reason === 'unsupported_stage' &&
@@ -874,6 +916,35 @@ class PuppeteerKeepAliveProbe {
               workflow.terminalOutcome = 'authed';
             } else if (currentStage?.state === 'otp_code') {
               workflow.terminalOutcome = 'need_otp';
+            } else if (currentStage?.state === 'captcha') {
+              await captchaSolver.solve('post_otp_captcha');
+              await driverPage.waitForTimeout(Math.min(Math.max(actionWaitMs, 1000), 10000));
+              const postCaptchaCapture = await capturePageArtifacts(runtime, {
+                label: `post-otp-captcha-wait-${actionIndex + 1}`,
+                screenshotsDir,
+                inventoriesDir,
+                sequence: artifactSequence++,
+                recordEvent,
+              });
+              workflow.postActionStage = postCaptchaCapture.stage;
+              workflow.finalStage = postCaptchaCapture.stage;
+              currentStage = postCaptchaCapture.stage;
+              currentInventory = postCaptchaCapture.inventory;
+              if (recordEvent) {
+                recordEvent('runtime_action_transition_after_otp_captcha', {
+                  actionIndex,
+                  nextStage: currentStage,
+                });
+              }
+              if (currentStage?.state === 'authed') {
+                workflow.terminalOutcome = 'authed';
+              } else if (currentStage?.state === 'otp_code') {
+                workflow.terminalOutcome = 'need_otp';
+              } else if (currentStage?.state === 'captcha') {
+                workflow.terminalOutcome = 'captcha';
+              } else {
+                workflow.terminalOutcome = 'blocked_or_unknown';
+              }
             } else {
               workflow.terminalOutcome = 'blocked_or_unknown';
             }
@@ -903,7 +974,7 @@ class PuppeteerKeepAliveProbe {
       const detachedAt = new Date().toISOString();
 
       return {
-        phase,
+        phase: artifactPhase,
         targetUrl,
         currentUrl,
         pageTitle,

@@ -132,6 +132,10 @@ class PuppeteerRuntime {
     return this.browser;
   }
 
+  getCDP(): unknown {
+    return this.cdp;
+  }
+
   getConnectTimeoutMs(): number {
     return this.connectTimeoutMs;
   }

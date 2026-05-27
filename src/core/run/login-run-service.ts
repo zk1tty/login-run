@@ -627,6 +627,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       const paths = artifacts.get(run.runId);
       const result = await probe.run({
         phase: 'reconnect',
+        artifactPhase: 'otp',
         checkpoint: run.getCheckpoint(),
         ttlMs,
         processKeepAliveMs,
@@ -644,7 +645,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
         screenshotsDir: paths?.screenshotsDir,
         inventoriesDir: paths?.inventoriesDir,
         artifactSequenceStart: nextScreenshotSequence(paths),
-        recordEvent: (name: string, detail: UnknownRecord = {}) => recordProbeEvent(run, 'reconnect', name, detail),
+        recordEvent: (name: string, detail: UnknownRecord = {}) => recordProbeEvent(run, 'otp', name, detail),
       }) as LoginRunServiceResult;
       finishFromResult(run, result);
     } catch (error: unknown) {

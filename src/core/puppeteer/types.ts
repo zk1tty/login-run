@@ -76,6 +76,7 @@ export type RuntimeAdapter = {
   getDriverPage: () => PuppeteerPageAdapterLike | null;
   getPage: () => PuppeteerPageLike | null;
   getBrowser: () => PuppeteerBrowserLike | null;
+  getCDP: () => unknown;
   getConnectTimeoutMs: () => number;
   getCurrentUrl: () => Promise<string>;
   getCurrentTitle: () => Promise<string>;
