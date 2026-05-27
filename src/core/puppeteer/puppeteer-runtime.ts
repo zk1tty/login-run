@@ -137,14 +137,14 @@ async function hasExpectedSelector(
   }
 }
 
-function scorePageCandidate(input: {
+function inspectPageMatch(input: {
   url: string;
   title: string;
   targetId: string;
   expectedSelectorFound: boolean;
   preferredUrl: string;
   preferredTargetId: string;
-}): Omit<PuppeteerPageSelectionCandidate, 'index' | 'expectedSelector'> {
+}): Omit<PuppeteerPageSelectionCandidate, 'index' | 'expectedSelector' | 'selected' | 'selectedReason'> {
   const preferredUrl = normalizeUrlForExactMatch(input.preferredUrl);
   const candidateUrl = normalizeUrlForExactMatch(input.url);
   const exactUrlMatch = Boolean(preferredUrl && candidateUrl && preferredUrl === candidateUrl);
@@ -159,27 +159,6 @@ function scorePageCandidate(input: {
       input.preferredTargetId === input.targetId
   );
   const isBlank = !candidateUrl || candidateUrl === 'about:blank';
-  let score = 0;
-
-  if (targetIdMatch) {
-    score += 1000;
-  }
-  if (exactUrlMatch) {
-    score += 800;
-  } else if (samePathMatch) {
-    score += 450;
-  }
-  if (input.expectedSelectorFound) {
-    score += 650;
-  }
-  if (!isBlank) {
-    score += 80;
-  } else {
-    score -= 100;
-  }
-  if (input.title) {
-    score += 10;
-  }
 
   return {
     url: candidateUrl,
@@ -190,7 +169,6 @@ function scorePageCandidate(input: {
     samePathMatch,
     targetIdMatch,
     isBlank,
-    score,
   };
 }
 
@@ -204,7 +182,7 @@ async function inspectPageCandidate(
   const title = await safePageTitle(page);
   const targetId = safeTargetId(page);
   const expectedSelectorFound = await hasExpectedSelector(page, expectedSelector);
-  const scored = scorePageCandidate({
+  const match = inspectPageMatch({
     url,
     title,
     targetId,
@@ -216,8 +194,75 @@ async function inspectPageCandidate(
   return {
     index,
     expectedSelector,
-    ...scored,
+    ...match,
+    selected: false,
+    selectedReason: '',
   };
+}
+
+function choosePageCandidate(
+  candidates: PuppeteerPageSelectionCandidate[],
+  input: PuppeteerPageSelectionInput
+): PuppeteerPageSelectionCandidate | null {
+  if (candidates.length === 0) {
+    return null;
+  }
+
+  const hasTargetHint = Boolean(String(input.preferredTargetId || '').trim());
+  const hasUrlHint = Boolean(String(input.preferredUrl || '').trim());
+  const choose = (
+    reason: string,
+    predicate: (candidate: PuppeteerPageSelectionCandidate) => boolean
+  ) => {
+    const candidate = candidates.find(predicate);
+    if (!candidate) {
+      return null;
+    }
+    candidate.selected = true;
+    candidate.selectedReason = reason;
+    return candidate;
+  };
+
+  if (hasTargetHint) {
+    const targetMatch = choose('target_id_match', candidate => candidate.targetIdMatch);
+    if (targetMatch) {
+      return targetMatch;
+    }
+  }
+
+  if (hasUrlHint) {
+    const exactMatch = choose('exact_url_match', candidate => candidate.exactUrlMatch);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const samePathMatch = choose('same_path_match', candidate => candidate.samePathMatch);
+    if (samePathMatch) {
+      return samePathMatch;
+    }
+  }
+
+  const nonBlankCandidates = candidates.filter(candidate => !candidate.isBlank);
+  if (nonBlankCandidates.length === 1) {
+    nonBlankCandidates[0].selected = true;
+    nonBlankCandidates[0].selectedReason = 'only_non_blank';
+    return nonBlankCandidates[0];
+  }
+
+  if (!hasTargetHint && !hasUrlHint) {
+    candidates[0].selected = true;
+    candidates[0].selectedReason = 'first_available';
+    return candidates[0];
+  }
+
+  return null;
+}
+
+function hasPageSelectionHint(input: PuppeteerPageSelectionInput): boolean {
+  return Boolean(
+    String(input.preferredTargetId || '').trim() ||
+      String(input.preferredUrl || '').trim()
+  );
 }
 
 async function pickActivePage(
@@ -229,25 +274,17 @@ async function pickActivePage(
     const candidates = await Promise.all(
       pages.map((page, index) => inspectPageCandidate(page, index, input))
     );
+    const selected = choosePageCandidate(candidates, input);
     try {
       input.onPageCandidates?.(candidates);
     } catch {
       // Candidate diagnostics must not affect browser reconnect.
     }
-
-    const sorted = candidates
-      .map((candidate, index) => ({ candidate, page: pages[index] }))
-      .filter(item => Boolean(item.page))
-      .sort((left, right) => {
-        const scoreDelta = right.candidate.score - left.candidate.score;
-        if (scoreDelta !== 0) {
-          return scoreDelta;
-        }
-        return left.candidate.index - right.candidate.index;
-      });
-
-    if (sorted[0]?.page) {
-      return sorted[0].page;
+    if (selected && pages[selected.index]) {
+      return pages[selected.index];
+    }
+    if (hasPageSelectionHint(input)) {
+      throw new Error('Checkpoint page not found after reconnect.');
     }
   }
   if (typeof browser.newPage !== 'function') {

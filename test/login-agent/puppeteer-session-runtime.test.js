@@ -73,7 +73,7 @@ test('pickActivePage prefers the checkpoint URL over the first blank page', asyn
   assert.equal(page, checkpointPage);
 });
 
-test('pickActivePage prefers the checkpoint selector when URL is not enough', async () => {
+test('pickActivePage does not use expectedSelector as a selection rule', async () => {
   const wrongPage = createPageStub({
     id: 'wrong',
     url: 'https://example.com/Services/MfaChallenge#!/?targetUrl=%2FMember',
@@ -100,7 +100,7 @@ test('pickActivePage prefers the checkpoint selector when URL is not enough', as
     expectedSelector: '#otpCode',
   });
 
-  assert.equal(page, otpPage);
+  assert.equal(page, wrongPage);
 });
 
 test('pickActivePage reports page candidates for reconnect diagnostics', async () => {
@@ -131,6 +131,39 @@ test('pickActivePage reports page candidates for reconnect diagnostics', async (
   assert.equal(candidates[1].url, 'https://example.com/member');
   assert.equal(candidates[1].expectedSelectorFound, true);
   assert.equal(candidates[1].exactUrlMatch, true);
+  assert.equal(candidates[1].selected, true);
+  assert.equal(candidates[1].selectedReason, 'exact_url_match');
+});
+
+test('pickActivePage fails when checkpoint hints cannot identify a page', async () => {
+  const firstPage = createPageStub({
+    id: 'first',
+    url: 'https://example.com/one',
+  });
+  const secondPage = createPageStub({
+    id: 'second',
+    url: 'https://example.com/two',
+  });
+  const browser = {
+    async pages() {
+      return [firstPage, secondPage];
+    },
+  };
+  let candidates = null;
+
+  await assert.rejects(
+    () => pickActivePage(browser, {
+      preferredUrl: 'https://example.com/member',
+      onPageCandidates(nextCandidates) {
+        candidates = nextCandidates;
+      },
+    }),
+    /Checkpoint page not found/
+  );
+
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[0].selected, false);
+  assert.equal(candidates[1].selected, false);
 });
 
 test('PuppeteerSessionRuntime.connect uses browser endpoint and creates a CDP session', async () => {

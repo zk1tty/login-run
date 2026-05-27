@@ -50,7 +50,8 @@ export type PuppeteerPageSelectionCandidate = {
   samePathMatch: boolean;
   targetIdMatch: boolean;
   isBlank: boolean;
-  score: number;
+  selected: boolean;
+  selectedReason: string;
 };
 
 export type PuppeteerBrowserLike = {

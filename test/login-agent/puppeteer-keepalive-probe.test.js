@@ -439,7 +439,8 @@ test('PuppeteerKeepAliveProbe reuses checkpoint session without creating a new s
           samePathMatch: false,
           targetIdMatch: false,
           isBlank: true,
-          score: -100,
+          selected: false,
+          selectedReason: '',
         },
       ]);
       return {
