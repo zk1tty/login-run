@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>StayAuthed Login Lifecycle Demo</title>
+    <link rel="stylesheet" href="/demo/style.css">
+  </head>
+  <body>
+    <main class="shell">
+      <header class="topbar">
+        <div>
+          <p class="eyebrow">StayAuthed</p>
+          <h1>Login Lifecycle Demo</h1>
+        </div>
+        <div class="status-pill" id="connectionStatus">idle</div>
+      </header>
+
+      <section class="layout">
+        <form class="panel form-panel" id="loginForm">
+          <div class="panel-header">
+            <h2>Start Login</h2>
+            <button type="button" id="resetButton">Reset</button>
+          </div>
+
+          <label>
+            Customer ID
+            <input name="customerId" value="demo" autocomplete="off" required>
+          </label>
+
+          <label>
+            Target URL
+            <input name="targetUrl" placeholder="https://example.com/login" required>
+          </label>
+
+          <label>
+            Username
+            <input name="username" autocomplete="username" required>
+          </label>
+
+          <label>
+            Password
+            <input name="password" type="password" autocomplete="current-password" required>
+          </label>
+
+          <label>
+            OTP Delivery
+            <select name="otpDeliverySelection">
+              <option value="email">email</option>
+              <option value="sms">sms</option>
+            </select>
+          </label>
+
+          <button class="primary" type="submit" id="startButton">Start Login</button>
+        </form>
+
+        <section class="panel screenshot-panel">
+          <div class="panel-header">
+            <h2>Screenshots</h2>
+            <span id="screenshotCount">0 frames</span>
+          </div>
+          <div class="screenshot-stage">
+            <img id="screenshotImage" alt="Login run screenshot">
+            <div class="empty-shot" id="emptyScreenshot">No screenshots yet</div>
+          </div>
+          <div class="screenshot-nav">
+            <div class="screenshot-meta">
+              <strong id="screenshotLabel">-</strong>
+              <span id="screenshotTimestamp">-</span>
+            </div>
+            <div class="screenshot-buttons">
+              <button type="button" id="previousScreenshot" aria-label="Previous screenshot">&lt;</button>
+              <button type="button" id="nextScreenshot" aria-label="Next screenshot">&gt;</button>
+            </div>
+          </div>
+        </section>
+      </section>
+
+      <section class="panel run-panel">
+          <div class="panel-header">
+            <h2>Run State</h2>
+            <div class="run-actions">
+              <button type="button" id="pollButton" disabled>Poll</button>
+              <button type="button" id="reconnectButton" disabled>Reconnect</button>
+            </div>
+          </div>
+
+          <div class="run-select-row">
+            <label>
+              Login Run
+              <select id="runSelect"></select>
+            </label>
+          </div>
+
+          <div class="result-strip">
+            <div>
+              <span>Result</span>
+              <strong id="runResult">idle</strong>
+            </div>
+            <div>
+              <span>Event</span>
+              <strong id="latestEvent">-</strong>
+            </div>
+          </div>
+
+          <div class="timer-grid">
+            <div>
+              <span>Total</span>
+              <strong id="totalTimer">0.0s</strong>
+            </div>
+            <div>
+              <span>Phase 1</span>
+              <strong id="phaseOneTimer">0.0s</strong>
+            </div>
+            <div>
+              <span>Phase 2</span>
+              <strong id="phaseTwoTimer">0.0s</strong>
+            </div>
+          </div>
+
+          <form class="otp-row hidden" id="otpForm">
+            <label>
+              OTP Code
+              <input name="code" inputmode="numeric" autocomplete="one-time-code" maxlength="32">
+            </label>
+            <button class="primary" type="submit">Submit OTP</button>
+          </form>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="panel-header">
+          <h2>Events</h2>
+          <span id="eventCount">0 events</span>
+        </div>
+        <div class="event-log" id="eventLog"></div>
+      </section>
+
+      <section class="panel output-panel">
+        <div class="panel-header">
+          <h2>Latest Payload</h2>
+          <span id="payloadStatus">empty</span>
+        </div>
+        <pre id="payloadOutput">{}</pre>
+      </section>
+    </main>
+
+    <script src="/demo/app.js"></script>
+  </body>
+</html>

@@ -2,6 +2,8 @@ import type { FastifyInstance } from 'fastify';
 import type { LoginRunService } from '../login/login-types';
 import type { FastifyPluginCallback } from 'fastify';
 const { createLoginRunService } = require('../core/run/login-run-service');
+const fs = require('node:fs/promises');
+const path = require('node:path');
 
 type LoginRunServiceProbe = {
   run(input: Record<string, unknown>): Promise<Record<string, unknown>>;
@@ -9,6 +11,26 @@ type LoginRunServiceProbe = {
 
 const Fastify = require('fastify');
 const loginRoutes = require('./routes/login-routes') as FastifyPluginCallback;
+const DEMO_ROOT = path.resolve(__dirname, '../../demo/login-lifecycle');
+
+const demoFiles: Record<string, { fileName: string; contentType: string }> = {
+  '/demo': {
+    fileName: 'index.html',
+    contentType: 'text/html; charset=utf-8',
+  },
+  '/demo/': {
+    fileName: 'index.html',
+    contentType: 'text/html; charset=utf-8',
+  },
+  '/demo/app.js': {
+    fileName: 'app.js',
+    contentType: 'application/javascript; charset=utf-8',
+  },
+  '/demo/style.css': {
+    fileName: 'style.css',
+    contentType: 'text/css; charset=utf-8',
+  },
+};
 
 export interface BuildAppOptions {
   logger?: boolean;
@@ -22,8 +44,10 @@ export interface BuildAppOptions {
   processKeepAliveMs?: number | string;
   connectTimeoutMs?: number | string;
   waitMs?: number | string;
+  reconnectWaitMs?: number | string;
   maxActions?: number | string;
   actionWaitMs?: number | string;
+  logsRoot?: string;
 }
 
 export interface AppInstance extends FastifyInstance {
@@ -56,6 +80,20 @@ function installErrorHandler(app: FastifyInstance): void {
   });
 }
 
+function installDemoRoutes(app: FastifyInstance): void {
+  app.get('/', async (_request, reply) => {
+    reply.redirect('/demo');
+  });
+
+  for (const [route, asset] of Object.entries(demoFiles)) {
+    app.get(route, async (_request, reply) => {
+      const filePath = path.join(DEMO_ROOT, asset.fileName);
+      const content = await fs.readFile(filePath);
+      reply.header('content-type', asset.contentType).send(content);
+    });
+  }
+}
+
 export function buildApp(options: BuildAppOptions = {}): AppInstance {
   const app = Fastify({
     logger: options.logger ?? true,
@@ -74,8 +112,10 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
       processKeepAliveMs: options.processKeepAliveMs,
       connectTimeoutMs: options.connectTimeoutMs,
       waitMs: options.waitMs,
+      reconnectWaitMs: options.reconnectWaitMs,
       maxActions: options.maxActions,
       actionWaitMs: options.actionWaitMs,
+      logsRoot: options.logsRoot,
     });
 
   appWithService.decorate('loginRunService', loginRunService);
@@ -90,6 +130,8 @@ export function buildApp(options: BuildAppOptions = {}): AppInstance {
       now: new Date().toISOString(),
     };
   });
+
+  installDemoRoutes(app);
 
   app.register(loginRoutes, {
     prefix: '/v1/logins',
