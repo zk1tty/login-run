@@ -268,6 +268,15 @@ function buildCheckpointFromResult(result: LoginRunServiceResult) {
   });
 }
 
+function isWeakReconnectCheckpoint(checkpoint: ReturnType<typeof buildCheckpointFromResult>): boolean {
+  const currentUrl = toStringValue(checkpoint.currentUrl);
+  const stage = asRecord(checkpoint.stage);
+  return (
+    (!currentUrl || currentUrl === 'about:blank') &&
+    toStringValue(stage.state) === 'blocked_or_unknown'
+  );
+}
+
 function publicRun(run: LoginRun): PublicLoginRun {
   return run.toPublicJson();
 }
@@ -559,6 +568,12 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       return;
     }
 
+    const previousCheckpoint = run.getCheckpoint();
+    const failureCheckpoint =
+      previousCheckpoint && isWeakReconnectCheckpoint(checkpoint)
+        ? previousCheckpoint
+        : checkpoint;
+
     run.markFailed(
       now(),
       {
@@ -567,7 +582,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       },
       {
         result: sanitizedResult,
-        checkpoint,
+        checkpoint: failureCheckpoint,
       }
     );
     emit(run, 'login.failed');

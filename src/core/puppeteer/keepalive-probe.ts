@@ -536,10 +536,27 @@ class PuppeteerKeepAliveProbe {
       });
     }
 
+    const preferredPageUrl = phase === 'reconnect'
+      ? String(checkpoint?.currentUrl || '').trim()
+      : '';
+    const expectedPageSelector = phase === 'reconnect'
+      ? String(checkpoint?.stage?.selector || '').trim()
+      : '';
     const runtime = normalizeRuntimeInstance(await this.connectRuntime({
       endpoint: sessionHandle.connectUrl,
       connectTimeoutMs: input.connectTimeoutMs,
       puppeteer: input.puppeteer,
+      preferredUrl: preferredPageUrl,
+      expectedSelector: expectedPageSelector,
+      onPageCandidates: candidates => {
+        if (recordEvent) {
+          recordEvent('runtime_page_candidates', {
+            preferredUrl: preferredPageUrl,
+            expectedSelector: expectedPageSelector,
+            candidates,
+          });
+        }
+      },
     }));
 
     if (!runtime) {
@@ -972,12 +989,16 @@ class PuppeteerKeepAliveProbe {
         ? buildReconnectMeasurement(checkpoint, observed)
         : null;
       const detachedAt = new Date().toISOString();
+      const finalCurrentUrl = await runtime.getCurrentUrl().catch(() => currentUrl);
+      const finalPageTitle = await runtime.getCurrentTitle().catch(() => pageTitle);
+      observed.finalUrl = finalCurrentUrl;
+      observed.finalTitle = finalPageTitle;
 
       return {
         phase: artifactPhase,
         targetUrl,
-        currentUrl,
-        pageTitle,
+        currentUrl: finalCurrentUrl,
+        pageTitle: finalPageTitle,
         detachedAt,
         observed,
         capture,

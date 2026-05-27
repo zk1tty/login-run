@@ -6,6 +6,8 @@ import type {
   PuppeteerBrowserLike,
   PuppeteerPageLike,
   PuppeteerPageAdapterLike,
+  PuppeteerPageSelectionCandidate,
+  PuppeteerPageSelectionInput,
 } from './types';
 
 const { adaptPuppeteerPage }: {
@@ -58,10 +60,195 @@ function isLikelyPageObject(value: unknown): value is PuppeteerPageLike {
   return typeof value === 'object' && value !== null;
 }
 
-async function pickActivePage(browser: PuppeteerBrowserLike): Promise<PuppeteerPageLike> {
+function normalizeUrlForExactMatch(value: unknown): string {
+  return String(value || '').trim();
+}
+
+function normalizeUrlForPathMatch(value: unknown): string {
+  const raw = String(value || '').trim();
+  if (!raw || raw === 'about:blank') {
+    return raw;
+  }
+
+  try {
+    const url = new URL(raw);
+    return `${url.origin}${url.pathname}${url.search}`;
+  } catch {
+    return raw.replace(/#.*$/, '');
+  }
+}
+
+async function safePageUrl(page: PuppeteerPageLike): Promise<string> {
+  try {
+    if (typeof page.url === 'function') {
+      return String(await page.url());
+    }
+    return String(page.url || '');
+  } catch {
+    return '';
+  }
+}
+
+async function safePageTitle(page: PuppeteerPageLike): Promise<string> {
+  try {
+    if (typeof page.title === 'function') {
+      return String(await page.title());
+    }
+    return String(page.title || '');
+  } catch {
+    return '';
+  }
+}
+
+function safeTargetId(page: PuppeteerPageLike): string {
+  try {
+    const target = page.target?.();
+    if (!target) {
+      return '';
+    }
+    if (typeof target.targetId === 'function') {
+      return String(target.targetId() || '');
+    }
+    return String(target._targetId || '');
+  } catch {
+    return '';
+  }
+}
+
+async function hasExpectedSelector(
+  page: PuppeteerPageLike,
+  expectedSelector: string
+): Promise<boolean> {
+  if (!expectedSelector || typeof page.evaluate !== 'function') {
+    return false;
+  }
+
+  try {
+    return Boolean(await page.evaluate(selector => {
+      const globalContext = globalThis as unknown as {
+        document?: {
+          querySelector?: (selector: string) => unknown;
+        };
+      };
+      return Boolean(globalContext.document?.querySelector?.(String(selector || '')));
+    }, expectedSelector));
+  } catch {
+    return false;
+  }
+}
+
+function scorePageCandidate(input: {
+  url: string;
+  title: string;
+  targetId: string;
+  expectedSelectorFound: boolean;
+  preferredUrl: string;
+  preferredTargetId: string;
+}): Omit<PuppeteerPageSelectionCandidate, 'index' | 'expectedSelector'> {
+  const preferredUrl = normalizeUrlForExactMatch(input.preferredUrl);
+  const candidateUrl = normalizeUrlForExactMatch(input.url);
+  const exactUrlMatch = Boolean(preferredUrl && candidateUrl && preferredUrl === candidateUrl);
+  const samePathMatch = Boolean(
+    preferredUrl &&
+      candidateUrl &&
+      normalizeUrlForPathMatch(preferredUrl) === normalizeUrlForPathMatch(candidateUrl)
+  );
+  const targetIdMatch = Boolean(
+    input.preferredTargetId &&
+      input.targetId &&
+      input.preferredTargetId === input.targetId
+  );
+  const isBlank = !candidateUrl || candidateUrl === 'about:blank';
+  let score = 0;
+
+  if (targetIdMatch) {
+    score += 1000;
+  }
+  if (exactUrlMatch) {
+    score += 800;
+  } else if (samePathMatch) {
+    score += 450;
+  }
+  if (input.expectedSelectorFound) {
+    score += 650;
+  }
+  if (!isBlank) {
+    score += 80;
+  } else {
+    score -= 100;
+  }
+  if (input.title) {
+    score += 10;
+  }
+
+  return {
+    url: candidateUrl,
+    title: input.title,
+    targetId: input.targetId,
+    expectedSelectorFound: input.expectedSelectorFound,
+    exactUrlMatch,
+    samePathMatch,
+    targetIdMatch,
+    isBlank,
+    score,
+  };
+}
+
+async function inspectPageCandidate(
+  page: PuppeteerPageLike,
+  index: number,
+  input: PuppeteerPageSelectionInput
+): Promise<PuppeteerPageSelectionCandidate> {
+  const expectedSelector = String(input.expectedSelector || '').trim();
+  const url = await safePageUrl(page);
+  const title = await safePageTitle(page);
+  const targetId = safeTargetId(page);
+  const expectedSelectorFound = await hasExpectedSelector(page, expectedSelector);
+  const scored = scorePageCandidate({
+    url,
+    title,
+    targetId,
+    expectedSelectorFound,
+    preferredUrl: String(input.preferredUrl || '').trim(),
+    preferredTargetId: String(input.preferredTargetId || '').trim(),
+  });
+
+  return {
+    index,
+    expectedSelector,
+    ...scored,
+  };
+}
+
+async function pickActivePage(
+  browser: PuppeteerBrowserLike,
+  input: PuppeteerPageSelectionInput = {}
+): Promise<PuppeteerPageLike> {
   const pages = typeof browser.pages === 'function' ? await browser.pages() : [];
-  if (Array.isArray(pages) && pages.length > 0 && pages[0]) {
-    return pages[0];
+  if (Array.isArray(pages) && pages.length > 0) {
+    const candidates = await Promise.all(
+      pages.map((page, index) => inspectPageCandidate(page, index, input))
+    );
+    try {
+      input.onPageCandidates?.(candidates);
+    } catch {
+      // Candidate diagnostics must not affect browser reconnect.
+    }
+
+    const sorted = candidates
+      .map((candidate, index) => ({ candidate, page: pages[index] }))
+      .filter(item => Boolean(item.page))
+      .sort((left, right) => {
+        const scoreDelta = right.candidate.score - left.candidate.score;
+        if (scoreDelta !== 0) {
+          return scoreDelta;
+        }
+        return left.candidate.index - right.candidate.index;
+      });
+
+    if (sorted[0]?.page) {
+      return sorted[0].page;
+    }
   }
   if (typeof browser.newPage !== 'function') {
     throw new Error('Puppeteer browser did not expose pages() or newPage().');
@@ -100,7 +287,12 @@ class PuppeteerRuntime {
       protocolTimeout: toInt(input.connectTimeoutMs, 60000, 1000),
       defaultViewport: null,
     });
-    const page = await pickActivePage(browser);
+    const page = await pickActivePage(browser, {
+      preferredUrl: input.preferredUrl,
+      preferredTargetId: input.preferredTargetId,
+      expectedSelector: input.expectedSelector,
+      onPageCandidates: input.onPageCandidates,
+    });
     const target = page.target?.();
     if (!target || typeof target.createCDPSession !== 'function') {
       throw new Error('Puppeteer page did not expose target().createCDPSession().');

@@ -3,6 +3,10 @@ export type PuppeteerConnectInput = {
   connectTimeoutMs?: number | string;
   puppeteer?: unknown;
   driverPage?: unknown;
+  preferredUrl?: string;
+  preferredTargetId?: string;
+  expectedSelector?: string;
+  onPageCandidates?: (candidates: PuppeteerPageSelectionCandidate[]) => void;
 };
 
 export type PuppeteerNavigationOptions = {
@@ -14,7 +18,11 @@ export type PuppeteerPageLike = {
   url?: () => Promise<string> | string;
   title?: () => Promise<string> | string;
   goto?: (url: string, options?: PuppeteerNavigationOptions) => Promise<unknown>;
-  target?: () => { createCDPSession: () => Promise<unknown> };
+  target?: () => {
+    createCDPSession: () => Promise<unknown>;
+    _targetId?: string;
+    targetId?: () => string;
+  };
   evaluate?: <T = unknown>(fn: (...args: unknown[]) => T, ...args: unknown[]) => Promise<T>;
   $eval?: <R = unknown>(selector: string, pageFunction: (...args: unknown[]) => R, ...args: unknown[]) => Promise<R>;
   click?: (selector: string) => Promise<unknown>;
@@ -22,6 +30,27 @@ export type PuppeteerPageLike = {
   keyboard?: { press: (key: string) => Promise<unknown> };
   mouse?: unknown;
   waitForTimeout?: (timeoutMs: number) => Promise<unknown>;
+};
+
+export type PuppeteerPageSelectionInput = {
+  preferredUrl?: string;
+  preferredTargetId?: string;
+  expectedSelector?: string;
+  onPageCandidates?: (candidates: PuppeteerPageSelectionCandidate[]) => void;
+};
+
+export type PuppeteerPageSelectionCandidate = {
+  index: number;
+  url: string;
+  title: string;
+  targetId: string;
+  expectedSelector: string;
+  expectedSelectorFound: boolean;
+  exactUrlMatch: boolean;
+  samePathMatch: boolean;
+  targetIdMatch: boolean;
+  isBlank: boolean;
+  score: number;
 };
 
 export type PuppeteerBrowserLike = {

@@ -424,6 +424,24 @@ test('PuppeteerKeepAliveProbe reuses checkpoint session without creating a new s
     },
     async connectRuntime(input) {
       assert.equal(input.endpoint, 'wss://example.com/session/connect/session-1');
+      assert.equal(input.preferredUrl, 'https://example.com/member');
+      assert.equal(input.expectedSelector, '#otpCode');
+      assert.equal(typeof input.onPageCandidates, 'function');
+      input.onPageCandidates([
+        {
+          index: 0,
+          url: 'about:blank',
+          title: '',
+          targetId: '',
+          expectedSelector: '#otpCode',
+          expectedSelectorFound: false,
+          exactUrlMatch: false,
+          samePathMatch: false,
+          targetIdMatch: false,
+          isBlank: true,
+          score: -100,
+        },
+      ]);
       return {
         connectTimeoutMs: 60000,
         page: createEvaluatePageStub(),
@@ -445,6 +463,10 @@ test('PuppeteerKeepAliveProbe reuses checkpoint session without creating a new s
       createdAt: '2026-05-20T04:00:00.000Z',
       currentUrl: 'https://example.com/member',
       pageTitle: 'Member',
+      stage: {
+        state: 'otp_code',
+        selector: '#otpCode',
+      },
       session: {
         id: 'session-1',
         connect: 'wss://example.com/session/connect/session-1',

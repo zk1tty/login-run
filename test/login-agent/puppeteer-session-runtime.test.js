@@ -6,6 +6,35 @@ const {
   pickActivePage,
 } = require('../../src/core/puppeteer/session-runtime');
 
+function createPageStub(input = {}) {
+  return {
+    id: input.id || '',
+    url() {
+      return input.url || 'about:blank';
+    },
+    async title() {
+      return input.title || '';
+    },
+    target() {
+      return {
+        targetId() {
+          return input.targetId || '';
+        },
+        async createCDPSession() {
+          return { id: `cdp-${input.id || 'page'}` };
+        },
+      };
+    },
+    async evaluate(fn, ...args) {
+      const selector = String(args[0] || '');
+      if (selector && Array.isArray(input.selectors)) {
+        return input.selectors.includes(selector);
+      }
+      return false;
+    },
+  };
+}
+
 test('pickActivePage returns existing page before creating a new one', async () => {
   const existingPage = { id: 'page-1' };
   const browser = {
@@ -19,6 +48,89 @@ test('pickActivePage returns existing page before creating a new one', async () 
 
   const page = await pickActivePage(browser);
   assert.equal(page, existingPage);
+});
+
+test('pickActivePage prefers the checkpoint URL over the first blank page', async () => {
+  const blankPage = createPageStub({ id: 'blank', url: 'about:blank' });
+  const checkpointPage = createPageStub({
+    id: 'checkpoint',
+    url: 'https://example.com/Services/MfaChallenge#!/?targetUrl=%2FMember',
+    title: 'Security Verification',
+  });
+  const browser = {
+    async pages() {
+      return [blankPage, checkpointPage];
+    },
+    async newPage() {
+      throw new Error('newPage should not be called');
+    },
+  };
+
+  const page = await pickActivePage(browser, {
+    preferredUrl: 'https://example.com/Services/MfaChallenge#!/?targetUrl=%2FMember',
+  });
+
+  assert.equal(page, checkpointPage);
+});
+
+test('pickActivePage prefers the checkpoint selector when URL is not enough', async () => {
+  const wrongPage = createPageStub({
+    id: 'wrong',
+    url: 'https://example.com/Services/MfaChallenge#!/?targetUrl=%2FMember',
+    title: 'Security Verification',
+    selectors: [],
+  });
+  const otpPage = createPageStub({
+    id: 'otp',
+    url: 'https://example.com/Services/MfaChallenge#!/?targetUrl=%2FMember',
+    title: 'Security Verification',
+    selectors: ['#otpCode'],
+  });
+  const browser = {
+    async pages() {
+      return [wrongPage, otpPage];
+    },
+    async newPage() {
+      throw new Error('newPage should not be called');
+    },
+  };
+
+  const page = await pickActivePage(browser, {
+    preferredUrl: 'https://example.com/Services/MfaChallenge#!/?targetUrl=%2FMember',
+    expectedSelector: '#otpCode',
+  });
+
+  assert.equal(page, otpPage);
+});
+
+test('pickActivePage reports page candidates for reconnect diagnostics', async () => {
+  const blankPage = createPageStub({ id: 'blank', url: 'about:blank' });
+  const checkpointPage = createPageStub({
+    id: 'checkpoint',
+    url: 'https://example.com/member',
+    title: 'Member',
+    targetId: 'target-2',
+    selectors: ['#logout'],
+  });
+  const browser = {
+    async pages() {
+      return [blankPage, checkpointPage];
+    },
+  };
+  let candidates = null;
+
+  await pickActivePage(browser, {
+    preferredUrl: 'https://example.com/member',
+    expectedSelector: '#logout',
+    onPageCandidates(nextCandidates) {
+      candidates = nextCandidates;
+    },
+  });
+
+  assert.equal(candidates.length, 2);
+  assert.equal(candidates[1].url, 'https://example.com/member');
+  assert.equal(candidates[1].expectedSelectorFound, true);
+  assert.equal(candidates[1].exactUrlMatch, true);
 });
 
 test('PuppeteerSessionRuntime.connect uses browser endpoint and creates a CDP session', async () => {

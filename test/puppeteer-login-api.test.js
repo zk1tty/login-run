@@ -505,6 +505,73 @@ test('POST /v1/logins/:runId/otp resumes the stored checkpoint', async () => {
   await app.close();
 });
 
+test('failed blank reconnect does not replace the last useful checkpoint', async () => {
+  const otpUrl = 'https://example.com/Services/MfaChallenge#!/?targetUrl=%2FMember';
+  const probe = createFakeProbe([
+    createProbeResult({
+      state: 'otp_code',
+      terminalOutcome: 'need_otp',
+      currentUrl: otpUrl,
+      pageTitle: 'Security Verification',
+    }),
+    input => createProbeResult({
+      phase: input.phase,
+      state: 'blocked_or_unknown',
+      terminalOutcome: '',
+      currentUrl: 'about:blank',
+      pageTitle: '',
+      sessionCreated: false,
+    }),
+    input => createProbeResult({
+      phase: input.phase,
+      state: 'authed',
+      terminalOutcome: 'authed',
+      sessionCreated: false,
+    }),
+  ]);
+  const app = buildApp({
+    logger: false,
+    probe,
+    idFactory: () => 'login_preserve_checkpoint',
+    logsRoot: createTempLogRoot(),
+  });
+
+  await app.inject({
+    method: 'POST',
+    url: '/v1/logins',
+    payload: {
+      customerId: 'danny',
+      targetUrl: 'https://example.com/login',
+      username: 'user@example.com',
+      password: 'secret',
+    },
+  });
+  await app.loginRunService.whenSettled('login_preserve_checkpoint');
+
+  const otpResponse = await app.inject({
+    method: 'POST',
+    url: '/v1/logins/login_preserve_checkpoint/otp',
+    payload: {
+      code: '123456',
+    },
+  });
+  assert.equal(otpResponse.statusCode, 202);
+  const failedRun = await app.loginRunService.whenSettled('login_preserve_checkpoint');
+  assert.equal(failedRun.status, 'failed');
+
+  const reconnectResponse = await app.inject({
+    method: 'POST',
+    url: '/v1/logins/login_preserve_checkpoint/reconnect',
+  });
+  assert.equal(reconnectResponse.statusCode, 202);
+  await app.loginRunService.whenSettled('login_preserve_checkpoint');
+
+  assert.equal(probe.calls[2].checkpoint.currentUrl, otpUrl);
+  assert.equal(probe.calls[2].checkpoint.session.id, 'session-1');
+
+  await app.close();
+});
+
 test('GET /v1/logins lists unique in-memory runs', async () => {
   const app = buildApp({
     logger: false,
