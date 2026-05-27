@@ -162,7 +162,7 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
         }
       }
 
-      const pageEval = this.page.$eval;
+      const pageEval = this.page.$eval?.bind(this.page);
       if (shouldFallbackToLegacyEval && typeof pageEval === 'function') {
         try {
           await pageEval(this.selector, () => true);
@@ -186,7 +186,7 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
     if (typeof this.page.$eval !== 'function') {
       throw new Error('Puppeteer locator evaluate requires $eval support.');
     }
-    const evalMethod = this.page.$eval;
+    const evalMethod = this.page.$eval.bind(this.page);
     if (typeof evalMethod !== 'function') {
       throw new Error('Puppeteer locator evaluate requires $eval support.');
     }
@@ -197,7 +197,7 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
     if (typeof this.page.$eval !== 'function') {
       throw new Error('Puppeteer locator check requires $eval support.');
     }
-    const evalMethod = this.page.$eval;
+    const evalMethod = this.page.$eval.bind(this.page);
     if (typeof evalMethod !== 'function') {
       throw new Error('Puppeteer locator check requires $eval support.');
     }
@@ -205,13 +205,21 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
       const candidate = node as {
         checked?: boolean;
         dispatchEvent?: (event: unknown) => unknown;
+        ownerDocument?: {
+          defaultView?: {
+            Event?: new (type: string, init?: { bubbles?: boolean }) => unknown;
+          };
+        };
       };
       if (candidate.checked == null) {
         throw new Error('check_target_not_input');
       }
       candidate.checked = true;
-      candidate.dispatchEvent?.({ type: 'input', bubbles: true });
-      candidate.dispatchEvent?.({ type: 'change', bubbles: true });
+      const eventCtor = candidate.ownerDocument?.defaultView?.Event;
+      if (typeof eventCtor === 'function') {
+        candidate.dispatchEvent?.(new eventCtor('input', { bubbles: true }));
+        candidate.dispatchEvent?.(new eventCtor('change', { bubbles: true }));
+      }
     });
   }
 
@@ -226,7 +234,7 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
     if (typeof this.page.$eval !== 'function') {
       throw new Error('Puppeteer locator fill requires $eval support.');
     }
-    const evalMethod = this.page.$eval;
+    const evalMethod = this.page.$eval.bind(this.page);
     if (typeof evalMethod !== 'function') {
       throw new Error('Puppeteer locator fill requires $eval support.');
     }
@@ -235,14 +243,22 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
         focus?: () => unknown;
         value?: string;
         dispatchEvent?: (event: unknown) => unknown;
+        ownerDocument?: {
+          defaultView?: {
+            Event?: new (type: string, init?: { bubbles?: boolean }) => unknown;
+          };
+        };
       };
       if (!candidate?.focus || !('value' in candidate)) {
         throw new Error('fill_target_not_text_input');
       }
       candidate.focus();
       candidate.value = String(nextValue || '');
-      candidate.dispatchEvent?.({ type: 'input', bubbles: true });
-      candidate.dispatchEvent?.({ type: 'change', bubbles: true });
+      const eventCtor = candidate.ownerDocument?.defaultView?.Event;
+      if (typeof eventCtor === 'function') {
+        candidate.dispatchEvent?.(new eventCtor('input', { bubbles: true }));
+        candidate.dispatchEvent?.(new eventCtor('change', { bubbles: true }));
+      }
     }, value);
   }
 
@@ -257,7 +273,7 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
   async selectOption(option: unknown): Promise<void> {
     const label = String((option as { label?: unknown })?.label || '').trim();
     const value = String((option as { value?: unknown })?.value || '').trim();
-    const evalMethod = this.page.$eval;
+    const evalMethod = this.page.$eval?.bind(this.page);
     if (typeof evalMethod !== 'function') {
       throw new Error('Puppeteer locator selectOption requires $eval support.');
     }
@@ -268,6 +284,11 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
         const candidate = node as {
           options?: Array<{ text: string; value: string; selected?: boolean }>;
           dispatchEvent?: (event: unknown) => unknown;
+          ownerDocument?: {
+            defaultView?: {
+              Event?: new (type: string, init?: { bubbles?: boolean }) => unknown;
+            };
+          };
         };
         if (!Array.isArray(candidate.options)) {
           throw new Error('select_target_not_select');
@@ -283,8 +304,11 @@ class PuppeteerLocatorAdapter implements PuppeteerLocatorLike {
         if ('value' in candidate) {
           candidate.value = matched.value;
         }
-        candidate.dispatchEvent?.({ type: 'input', bubbles: true });
-        candidate.dispatchEvent?.({ type: 'change', bubbles: true });
+        const eventCtor = candidate.ownerDocument?.defaultView?.Event;
+        if (typeof eventCtor === 'function') {
+          candidate.dispatchEvent?.(new eventCtor('input', { bubbles: true }));
+          candidate.dispatchEvent?.(new eventCtor('change', { bubbles: true }));
+        }
       },
       { label, value }
     );
