@@ -10,8 +10,8 @@
     "otp:gmail:watcher": "node scripts/puppeteer-login/gmail-otp-to-file.js",
     "typecheck": "tsc --noEmit",
     "typecheck:strict": "tsc --noEmit -p tsconfig.strict-ts-only.json",
-    "start:bl-server": "node src/server.js",
-    "dev:bl-server": "node --watch src/server.js",
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
     "test": "node --test"
   },
   "dependencies": {
