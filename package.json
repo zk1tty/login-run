@@ -10,9 +10,9 @@
     "otp:gmail:watcher": "node scripts/puppeteer-login/gmail-otp-to-file.js",
     "typecheck": "tsc --noEmit",
     "typecheck:strict": "tsc --noEmit -p tsconfig.strict-ts-only.json",
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js",
-    "test": "node --test"
+    "start": "bun src/server.js",
+    "dev": "bun --watch src/server.js",
+    "test": "bun test"
   },
   "dependencies": {
     "agentql": "1.13.0",
