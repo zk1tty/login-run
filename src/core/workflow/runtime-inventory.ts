@@ -343,11 +343,11 @@ async function inspectRuntimeInventory(pageOrRuntime: unknown): Promise<RuntimeI
         };
       }
 
+      const activeElement = documentObj.activeElement || null;
       const allNodes = Array.from(
         doc.querySelectorAll('input, textarea, button, a, select, [role="button"]')
       );
       const candidates = allNodes.map((node, index) => buildCandidate(node, index));
-      const activeElement = documentObj.activeElement || null;
 
       return {
         title: doc.title || '',

@@ -337,6 +337,41 @@ function summarizeInventory(inventory = {}) {
   };
 }
 
+async function captureScreenshotArtifact(page, screenshotPath) {
+  if (!screenshotPath || !page || typeof page.screenshot !== 'function') {
+    return;
+  }
+
+  try {
+    await page.screenshot({ path: screenshotPath, fullPage: true });
+    return;
+  } catch (error) {
+    const message = String(error?.message || error || '');
+    if (!/0 width|width/i.test(message)) {
+      throw error;
+    }
+  }
+
+  if (typeof page.setViewport === 'function') {
+    await page.setViewport({
+      width: 1295,
+      height: 959,
+      deviceScaleFactor: 1,
+    }).catch(() => {});
+  }
+  if (typeof page.evaluate === 'function') {
+    await page.evaluate(() => {
+      globalThis.scrollTo?.(0, 0);
+    }).catch(() => {});
+  }
+
+  await page.screenshot({
+    path: screenshotPath,
+    fullPage: false,
+    captureBeyondViewport: false,
+  });
+}
+
 async function capturePageArtifacts(runtimeOrPage, input = {}) {
   const label = String(input.label || 'landing');
   const screenshotsDir = String(input.screenshotsDir || '');
@@ -357,7 +392,7 @@ async function capturePageArtifacts(runtimeOrPage, input = {}) {
   try {
     snapshot = await detectChallengeSnapshot(runtimePage);
     if (screenshotPath && artifactPage && typeof artifactPage.screenshot === 'function') {
-      await artifactPage.screenshot({ path: screenshotPath, fullPage: true });
+      await captureScreenshotArtifact(artifactPage, screenshotPath);
     }
   } catch (error) {
     screenshotError = String(error?.message || error || 'unknown_error');
@@ -485,6 +520,7 @@ class PuppeteerKeepAliveProbe {
     const workflowEnabled = input.workflowEnabled !== false;
     const maxActions = toInt(input.maxActions, 8, 1);
     const actionWaitMs = toInt(input.actionWaitMs, 5000, 0);
+    let artifactSequence = toInt(input.artifactSequenceStart, 1, 1);
     const payload = { ...(input.payload || {}) };
     const otpCodeFile = String(input.otpCodeFile || '').trim();
     const otpWaitMs = toInt(input.otpWaitMs, 0, 0);
@@ -555,7 +591,7 @@ class PuppeteerKeepAliveProbe {
         label: phase,
         screenshotsDir,
         inventoriesDir,
-        sequence: 1,
+        sequence: artifactSequence++,
         recordEvent,
       });
       let workflow = {
@@ -615,7 +651,7 @@ class PuppeteerKeepAliveProbe {
                 label: `post-wait-${actionIndex + 1}`,
                 screenshotsDir,
                 inventoriesDir,
-                sequence: actionIndex + 2,
+                sequence: artifactSequence++,
                 recordEvent,
               });
               workflow.postActionStage = retryCapture.stage;
@@ -728,7 +764,7 @@ class PuppeteerKeepAliveProbe {
             label: `post-action-${actionIndex + 1}`,
             screenshotsDir,
             inventoriesDir,
-            sequence: actionIndex + 2,
+            sequence: artifactSequence++,
             recordEvent,
           });
           workflow.postActionStage = postActionCapture.stage;
@@ -768,7 +804,7 @@ class PuppeteerKeepAliveProbe {
               label: `post-delivery-wait-${actionIndex + 1}`,
               screenshotsDir,
               inventoriesDir,
-              sequence: actionIndex + 3,
+              sequence: artifactSequence++,
               recordEvent,
             });
             workflow.postActionStage = transitionCapture.stage;
@@ -781,6 +817,43 @@ class PuppeteerKeepAliveProbe {
                 nextStage: currentStage,
               });
             }
+          }
+
+          if (
+            actionResult.status === 'ok' &&
+            actionPlan.type === 'fill_input_and_submit' &&
+            actionPlan.stage === 'otp_code'
+          ) {
+            await driverPage.waitForLoadState('domcontentloaded', {
+              timeout: Math.min(runtime.getConnectTimeoutMs(), 10000),
+            }).catch(() => {});
+            await driverPage.waitForTimeout(Math.min(Math.max(actionWaitMs, 0), 10000));
+            const transitionCapture = await capturePageArtifacts(runtime, {
+              label: `post-otp-wait-${actionIndex + 1}`,
+              screenshotsDir,
+              inventoriesDir,
+              sequence: artifactSequence++,
+              recordEvent,
+            });
+            workflow.postActionStage = transitionCapture.stage;
+            workflow.finalStage = transitionCapture.stage;
+            currentStage = transitionCapture.stage;
+            currentInventory = transitionCapture.inventory;
+            if (recordEvent) {
+              recordEvent('runtime_action_transition_after_otp', {
+                actionIndex,
+                nextStage: currentStage,
+              });
+            }
+
+            if (currentStage?.state === 'authed') {
+              workflow.terminalOutcome = 'authed';
+            } else if (currentStage?.state === 'otp_code') {
+              workflow.terminalOutcome = 'need_otp';
+            } else {
+              workflow.terminalOutcome = 'blocked_or_unknown';
+            }
+            break;
           }
 
           if (!workflow.terminalOutcome) {

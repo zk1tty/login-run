@@ -7,6 +7,7 @@ import type {
 import type {
   LoginEvent,
   LoginRunAcceptedResponse,
+  LoginRunListResponse,
   LoginRunService,
   StartLoginRequest,
   SubmitOtpRequest,
@@ -22,7 +23,7 @@ const runParamsSchema = {
   properties: {
     runId: {
       type: 'string',
-      pattern: '^login_[A-Za-z0-9]+$',
+      pattern: '^login_[A-Za-z0-9_]+$',
     },
   },
 };
@@ -41,6 +42,23 @@ const loginRoutes: FastifyPluginCallback = (
   done
 ) => {
   const serviceHost = fastify as typeof fastify & LoginRunServiceProvider;
+
+  function toAcceptedResponse(run: { runId: string; status: LoginRunAcceptedResponse['status']; state: LoginRunAcceptedResponse['state'] }): LoginRunAcceptedResponse {
+    return {
+      runId: run.runId,
+      status: run.status,
+      state: run.state,
+      statusUrl: `/v1/logins/${encodeURIComponent(run.runId)}`,
+      eventsUrl: `/v1/logins/${encodeURIComponent(run.runId)}/events`,
+    };
+  }
+
+  fastify.get(
+    '/',
+    async (): Promise<LoginRunListResponse> => {
+      return serviceHost.loginRunService.listRuns();
+    }
+  );
 
   fastify.post(
     '/',
@@ -65,15 +83,7 @@ const loginRoutes: FastifyPluginCallback = (
     },
     async (request: FastifyRequest<{ Body: StartLoginRequest }>, reply: FastifyReply): Promise<void> => {
       const run = serviceHost.loginRunService.startLogin(request.body || {});
-      const response: LoginRunAcceptedResponse = {
-        runId: run.runId,
-        status: run.status,
-        state: run.state,
-        statusUrl: `/v1/logins/${encodeURIComponent(run.runId)}`,
-        eventsUrl: `/v1/logins/${encodeURIComponent(run.runId)}/events`,
-      };
-
-      reply.code(202).send(response);
+      reply.code(202).send(toAcceptedResponse(run));
     }
   );
 
@@ -121,6 +131,54 @@ const loginRoutes: FastifyPluginCallback = (
     }
   );
 
+  fastify.get(
+    '/:runId/artifacts/screenshots',
+    {
+      schema: {
+        params: runParamsSchema,
+      },
+    },
+    async (request: FastifyRequest<{ Params: { runId: string } }>): Promise<unknown> => {
+      return serviceHost.loginRunService.listScreenshots(request.params.runId);
+    }
+  );
+
+  fastify.get(
+    '/:runId/artifacts/screenshots/:fileName',
+    {
+      schema: {
+        params: {
+          type: 'object',
+          required: ['runId', 'fileName'],
+          properties: {
+            runId: {
+              type: 'string',
+              pattern: '^login_[A-Za-z0-9_]+$',
+            },
+            fileName: {
+              type: 'string',
+              pattern: '^[A-Za-z0-9._-]+\\.png$',
+            },
+          },
+        },
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { runId: string; fileName: string } }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+      const screenshot = serviceHost.loginRunService.getScreenshot(
+        request.params.runId,
+        request.params.fileName
+      );
+
+      reply
+        .header('content-type', screenshot.contentType)
+        .header('cache-control', 'no-store')
+        .send(screenshot.buffer);
+    }
+  );
+
   fastify.post(
     '/:runId/otp',
     {
@@ -144,14 +202,23 @@ const loginRoutes: FastifyPluginCallback = (
         request.params.runId,
         request.body || {}
       );
-      const response: LoginRunAcceptedResponse = {
-        runId: run.runId,
-        status: run.status,
-        state: run.state,
-        statusUrl: `/v1/logins/${encodeURIComponent(run.runId)}`,
-        eventsUrl: `/v1/logins/${encodeURIComponent(run.runId)}/events`,
-      };
-      reply.code(202).send(response);
+      reply.code(202).send(toAcceptedResponse(run));
+    }
+  );
+
+  fastify.post(
+    '/:runId/reconnect',
+    {
+      schema: {
+        params: runParamsSchema,
+      },
+    },
+    async (
+      request: FastifyRequest<{ Params: { runId: string } }>,
+      reply: FastifyReply
+    ): Promise<void> => {
+      const run = serviceHost.loginRunService.reconnect(request.params.runId);
+      reply.code(202).send(toAcceptedResponse(run));
     }
   );
 

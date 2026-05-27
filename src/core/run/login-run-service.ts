@@ -1,11 +1,18 @@
-import { randomBytes, randomUUID } from 'node:crypto';
+import { randomBytes } from 'node:crypto';
+import fs from 'node:fs';
+import path from 'node:path';
 
 import { LoginRun } from '../../login/login-run';
 import type {
   LoginEvent,
   LoginEventListener,
   LoginRunCheckpoint,
+  LoginRunLifecycleEventType,
+  LoginRunListResponse,
   LoginRunService,
+  LoginScreenshotEvent,
+  LoginScreenshotArtifactFile,
+  LoginScreenshotArtifactList,
   PublicLoginRun,
   SanitizedLoginError,
   SanitizedLoginResult,
@@ -33,8 +40,10 @@ interface LoginRunServiceOptions {
   processKeepAliveMs?: string | number;
   connectTimeoutMs?: string | number;
   waitMs?: string | number;
+  reconnectWaitMs?: string | number;
   maxActions?: string | number;
   actionWaitMs?: string | number;
+  logsRoot?: string;
 }
 
 interface ProbeInput {
@@ -69,6 +78,19 @@ interface LoginRunServiceResult {
   detachedAt?: unknown;
   workflow?: UnknownRecord;
   capture?: UnknownRecord;
+  observed?: unknown;
+  measurement?: unknown;
+  runtime?: unknown;
+  endpointForLogs?: unknown;
+}
+
+interface RunArtifactPaths {
+  runDir: string;
+  summaryPath: string;
+  checkpointPath: string;
+  eventsPath: string;
+  screenshotsDir: string;
+  inventoriesDir: string;
 }
 
 const CUSTOMER_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
@@ -117,11 +139,41 @@ function assertCustomerId(value: unknown): string {
 }
 
 function createRunId(): string {
-  if (typeof randomUUID === 'function') {
-    return `login_${randomUUID().replace(/-/g, '')}`;
-  }
+  const timestamp = new Date().toISOString().replace(/[-:.]/g, '');
+  return `login_${timestamp}_${randomBytes(4).toString('hex')}`;
+}
 
-  return `login_${randomBytes(16).toString('hex')}`;
+function safePathSegment(value: string, fallback: string): string {
+  const normalized = value.trim().replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  return normalized || fallback;
+}
+
+function isSafeArtifactFileName(value: unknown): value is string {
+  const fileName = String(value || '').trim();
+  return /^[A-Za-z0-9._-]+\.png$/.test(fileName) && !fileName.includes('..');
+}
+
+function labelFromScreenshotFile(fileName: string): string {
+  return fileName
+    .replace(/^\d+-/, '')
+    .replace(/\.png$/i, '')
+    .replace(/[-_]+/g, ' ')
+    .trim() || fileName;
+}
+
+function sequenceFromScreenshotFile(fileName: string): number {
+  const match = fileName.match(/^(\d+)-/);
+  return match ? toInt(match[1], 0, 0) : 0;
+}
+
+function toTimestampMs(value: unknown): number {
+  const parsed = Date.parse(toStringValue(value));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function appendJsonLine(filePath: string, value: unknown): void {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.appendFileSync(filePath, `${JSON.stringify(value)}\n`);
 }
 
 function stageState(result: LoginRunServiceResult): string {
@@ -220,14 +272,37 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
 
   const runs = new Map<string, LoginRun>();
   const subscribers = new Map<string, Set<LoginEventListener>>();
+  const artifacts = new Map<string, RunArtifactPaths>();
 
   const connectTimeoutMs = options.connectTimeoutMs || process.env.SESSION_API_CONNECT_TIMEOUT_MS;
   const waitMs = options.waitMs || process.env.PUPPETEER_KEEPALIVE_WAIT_MS || 5000;
+  const reconnectWaitMs = options.reconnectWaitMs || process.env.LOGIN_RECONNECT_WAIT_MS || 1000;
   const maxActions = options.maxActions || process.env.LOGIN_WORKFLOW_MAX_ACTIONS || 8;
   const actionWaitMs = options.actionWaitMs || process.env.LOGIN_WORKFLOW_ACTION_WAIT_MS || 5000;
   const ttlMs = options.ttlMs || process.env.SESSION_API_TTL_MS;
   const processKeepAliveMs =
     options.processKeepAliveMs || process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS;
+  const logsRoot = path.resolve(options.logsRoot || process.env.RUN_LOGS_ROOT || '.log');
+
+  function createRunArtifacts(run: LoginRun): RunArtifactPaths {
+    const customerSegment = safePathSegment(run.customerId, 'unknown-customer');
+    const runSegment = safePathSegment(run.runId, 'unknown-run');
+    const runDir = path.join(logsRoot, customerSegment, 'api-login-runs', runSegment);
+    const paths = {
+      runDir,
+      summaryPath: path.join(runDir, 'summary.json'),
+      checkpointPath: path.join(runDir, 'checkpoint.json'),
+      eventsPath: path.join(runDir, 'events.jsonl'),
+      screenshotsDir: path.join(runDir, 'screenshots'),
+      inventoriesDir: path.join(runDir, 'inventories'),
+    };
+
+    fs.mkdirSync(paths.screenshotsDir, { recursive: true });
+    fs.mkdirSync(paths.inventoriesDir, { recursive: true });
+    artifacts.set(run.runId, paths);
+
+    return paths;
+  }
 
   function getRunOrThrow(runId: unknown): LoginRun {
     const key = toStringValue(runId);
@@ -239,12 +314,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
     return run;
   }
 
-  function emit(run: LoginRun, type: LoginEvent['type']): void {
-    const event: LoginEvent = {
-      type,
-      data: publicRun(run),
-    };
-
+  function notifySubscribers(run: LoginRun, event: LoginEvent): void {
     const listeners = subscribers.get(run.runId);
     if (!listeners) {
       return;
@@ -253,6 +323,213 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
     for (const listener of listeners) {
       listener(event);
     }
+  }
+
+  function emit(run: LoginRun, type: LoginRunLifecycleEventType): void {
+    const event: LoginEvent = {
+      type,
+      data: publicRun(run),
+    };
+
+    recordServiceEvent(run, type, {
+      status: event.data.status,
+      state: event.data.state,
+      nextActions: event.data.nextActions,
+    });
+    writeRunSummary(run);
+    notifySubscribers(run, event);
+  }
+
+  function buildScreenshotEvent(
+    run: LoginRun,
+    phase: string,
+    at: string,
+    detail: UnknownRecord
+  ): LoginScreenshotEvent | null {
+    const screenshotPath = toStringValue(detail.screenshotPath);
+    if (!screenshotPath) {
+      return null;
+    }
+
+    const fileName = path.basename(screenshotPath);
+    if (!isSafeArtifactFileName(fileName)) {
+      return null;
+    }
+
+    return {
+      type: 'login.screenshot',
+      data: {
+        runId: run.runId,
+        phase,
+        fileName,
+        label: toStringValue(detail.label) || labelFromScreenshotFile(fileName),
+        createdAt: at,
+        sequence: sequenceFromScreenshotFile(fileName),
+        url: `/v1/logins/${encodeURIComponent(run.runId)}/artifacts/screenshots/${encodeURIComponent(fileName)}`,
+      },
+    };
+  }
+
+  function recordServiceEvent(run: LoginRun, name: string, detail: UnknownRecord = {}): void {
+    const paths = artifacts.get(run.runId);
+    if (!paths) {
+      return;
+    }
+
+    appendJsonLine(paths.eventsPath, {
+      at: now(),
+      name,
+      detail,
+    });
+  }
+
+  function recordProbeEvent(run: LoginRun, phase: string, name: string, detail: UnknownRecord = {}): void {
+    const paths = artifacts.get(run.runId);
+    if (!paths) {
+      return;
+    }
+
+    const at = now();
+    appendJsonLine(paths.eventsPath, {
+      at,
+      name,
+      phase,
+      detail,
+    });
+
+    if (name === 'screenshot') {
+      const event = buildScreenshotEvent(run, phase, at, detail);
+      if (event) {
+        notifySubscribers(run, event);
+      }
+    }
+  }
+
+  function writeRunSummary(run: LoginRun, extra: UnknownRecord = {}): void {
+    const paths = artifacts.get(run.runId);
+    if (!paths) {
+      return;
+    }
+
+    const checkpoint = run.getCheckpoint();
+    const payload = {
+      checkedAt: now(),
+      run: publicRun(run),
+      artifacts: {
+        runDir: paths.runDir,
+        eventsPath: paths.eventsPath,
+        summaryPath: paths.summaryPath,
+        checkpointPath: paths.checkpointPath,
+        screenshotsDir: paths.screenshotsDir,
+        inventoriesDir: paths.inventoriesDir,
+      },
+      ...extra,
+    };
+
+    fs.writeFileSync(paths.summaryPath, JSON.stringify(payload, null, 2));
+    if (checkpoint) {
+      fs.writeFileSync(paths.checkpointPath, JSON.stringify(checkpoint, null, 2));
+    }
+  }
+
+  function nextScreenshotSequence(paths: RunArtifactPaths | undefined): number {
+    if (!paths || !fs.existsSync(paths.screenshotsDir)) {
+      return 1;
+    }
+
+    return fs.readdirSync(paths.screenshotsDir).filter(isSafeArtifactFileName).length + 1;
+  }
+
+  function readScreenshotEventTimes(paths: RunArtifactPaths): Map<string, string> {
+    const timestamps = new Map<string, string>();
+    if (!fs.existsSync(paths.eventsPath)) {
+      return timestamps;
+    }
+
+    const lines = fs.readFileSync(paths.eventsPath, 'utf8').split('\n').filter(Boolean);
+    for (const line of lines) {
+      try {
+        const event = JSON.parse(line) as UnknownRecord;
+        if (event.name !== 'screenshot') {
+          continue;
+        }
+        const detail = asRecord(event.detail);
+        const screenshotPath = toStringValue(detail.screenshotPath);
+        if (!screenshotPath) {
+          continue;
+        }
+        timestamps.set(path.basename(screenshotPath), toStringValue(event.at));
+      } catch {
+        // Ignore partial or malformed JSONL lines; file mtime remains the fallback.
+      }
+    }
+
+    return timestamps;
+  }
+
+  function listScreenshots(runId: string): LoginScreenshotArtifactList {
+    const run = getRunOrThrow(runId);
+    const paths = artifacts.get(run.runId);
+    if (!paths) {
+      return {
+        runId: run.runId,
+        screenshots: [],
+      };
+    }
+
+    const eventTimes = readScreenshotEventTimes(paths);
+    const screenshots = fs.existsSync(paths.screenshotsDir)
+      ? fs.readdirSync(paths.screenshotsDir)
+          .filter(isSafeArtifactFileName)
+          .map(fileName => {
+            const filePath = path.join(paths.screenshotsDir, fileName);
+            const stat = fs.statSync(filePath);
+            const createdAt = eventTimes.get(fileName) || stat.mtime.toISOString();
+            return {
+              fileName,
+              label: labelFromScreenshotFile(fileName),
+              createdAt,
+              url: `/v1/logins/${encodeURIComponent(run.runId)}/artifacts/screenshots/${encodeURIComponent(fileName)}`,
+            };
+          })
+          .sort((left, right) => {
+            const timestampDelta = toTimestampMs(left.createdAt) - toTimestampMs(right.createdAt);
+            if (timestampDelta !== 0) {
+              return timestampDelta;
+            }
+            return left.fileName.localeCompare(right.fileName);
+          })
+      : [];
+
+    return {
+      runId: run.runId,
+      screenshots,
+    };
+  }
+
+  function getScreenshot(runId: string, fileName: string): LoginScreenshotArtifactFile {
+    const run = getRunOrThrow(runId);
+    if (!isSafeArtifactFileName(fileName)) {
+      throw createHttpError(400, 'Invalid screenshot filename.');
+    }
+
+    const paths = artifacts.get(run.runId);
+    if (!paths) {
+      throw createHttpError(404, 'Screenshot not found.');
+    }
+
+    const filePath = path.join(paths.screenshotsDir, fileName);
+    const resolvedPath = path.resolve(filePath);
+    const resolvedRoot = path.resolve(paths.screenshotsDir);
+    if (!resolvedPath.startsWith(`${resolvedRoot}${path.sep}`) || !fs.existsSync(resolvedPath)) {
+      throw createHttpError(404, 'Screenshot not found.');
+    }
+
+    return {
+      fileName,
+      contentType: 'image/png',
+      buffer: fs.readFileSync(resolvedPath),
+    };
   }
 
   function finishFromResult(run: LoginRun, result: LoginRunServiceResult): void {
@@ -292,6 +569,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
     otpDeliverySelection: string;
   }): Promise<void> {
     try {
+      const paths = artifacts.get(run.runId);
       const result = await probe.run({
         phase: 'bootstrap',
         targetUrl: input.targetUrl,
@@ -308,6 +586,10 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
           OTP_DELIVERY_SELECTION: input.otpDeliverySelection || 'email',
           OTP_CODE: '',
         },
+        screenshotsDir: paths?.screenshotsDir,
+        inventoriesDir: paths?.inventoriesDir,
+        artifactSequenceStart: nextScreenshotSequence(paths),
+        recordEvent: (name: string, detail: UnknownRecord = {}) => recordProbeEvent(run, 'bootstrap', name, detail),
       }) as LoginRunServiceResult;
       finishFromResult(run, result);
     } catch (error: unknown) {
@@ -328,6 +610,7 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
 
   async function runPhase2(run: LoginRun, code: string): Promise<void> {
     try {
+      const paths = artifacts.get(run.runId);
       const result = await probe.run({
         phase: 'reconnect',
         checkpoint: run.getCheckpoint(),
@@ -344,6 +627,51 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
           OTP_DELIVERY_SELECTION: 'email',
           OTP_CODE: code,
         },
+        screenshotsDir: paths?.screenshotsDir,
+        inventoriesDir: paths?.inventoriesDir,
+        artifactSequenceStart: nextScreenshotSequence(paths),
+        recordEvent: (name: string, detail: UnknownRecord = {}) => recordProbeEvent(run, 'reconnect', name, detail),
+      }) as LoginRunServiceResult;
+      finishFromResult(run, result);
+    } catch (error: unknown) {
+      run.markFailed(
+        now(),
+        {
+          message: toStringValue((error as { message?: unknown })?.message || error),
+        },
+        {
+          result: null,
+        }
+      );
+      emit(run, 'login.failed');
+    } finally {
+      run.setActiveTask(null);
+    }
+  }
+
+  async function runReconnect(run: LoginRun): Promise<void> {
+    try {
+      const paths = artifacts.get(run.runId);
+      const result = await probe.run({
+        phase: 'reconnect',
+        checkpoint: run.getCheckpoint(),
+        ttlMs,
+        processKeepAliveMs,
+        connectTimeoutMs,
+        waitMs: reconnectWaitMs,
+        workflowEnabled: false,
+        maxActions: 0,
+        actionWaitMs: 0,
+        payload: {
+          LOGIN_USERNAME: '',
+          LOGIN_PASSWORD: '',
+          OTP_DELIVERY_SELECTION: 'email',
+          OTP_CODE: '',
+        },
+        screenshotsDir: paths?.screenshotsDir,
+        inventoriesDir: paths?.inventoriesDir,
+        artifactSequenceStart: nextScreenshotSequence(paths),
+        recordEvent: (name: string, detail: UnknownRecord = {}) => recordProbeEvent(run, 'reconnect', name, detail),
       }) as LoginRunServiceResult;
       finishFromResult(run, result);
     } catch (error: unknown) {
@@ -378,6 +706,13 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
     });
 
     runs.set(runId, run);
+    const paths = createRunArtifacts(run);
+    writeRunSummary(run, {
+      artifactCreatedAt: timestamp,
+    });
+    recordServiceEvent(run, 'login.run_created', {
+      runDir: paths.runDir,
+    });
     run.setActiveTask(
       runPhase1(run, {
         targetUrl,
@@ -414,6 +749,35 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
     return publicRun(run);
   }
 
+  function reconnect(runId: string): PublicLoginRun {
+    const run = getRunOrThrow(runId);
+
+    if (run.getStatus() === 'running') {
+      throw createHttpError(409, 'Login run is already running.');
+    }
+    if (!run.getCheckpoint()?.session?.connect) {
+      throw createHttpError(409, 'Login run is missing a resumable session checkpoint.');
+    }
+
+    run.markRunning(now(), {
+      error: null,
+    });
+    emit(run, 'login.updated');
+    run.setActiveTask(runReconnect(run));
+
+    return publicRun(run);
+  }
+
+  function listRuns(): LoginRunListResponse {
+    const sortedRuns = Array.from(runs.values())
+      .map(publicRun)
+      .sort((left, right) => toTimestampMs(right.createdAt) - toTimestampMs(left.createdAt));
+
+    return {
+      runs: sortedRuns,
+    };
+  }
+
   function getRun(runId: string): PublicLoginRun {
     return publicRun(getRunOrThrow(runId));
   }
@@ -428,6 +792,20 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
       type: 'login.updated',
       data: publicRun(run),
     });
+    for (const screenshot of listScreenshots(run.runId).screenshots) {
+      listener({
+        type: 'login.screenshot',
+        data: {
+          runId: run.runId,
+          phase: 'replay',
+          fileName: screenshot.fileName,
+          label: screenshot.label,
+          createdAt: screenshot.createdAt,
+          sequence: sequenceFromScreenshotFile(screenshot.fileName),
+          url: screenshot.url,
+        },
+      });
+    }
 
     return () => {
       listeners.delete(listener);
@@ -458,7 +836,11 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
   return {
     startLogin,
     submitOtp,
+    reconnect,
+    listRuns,
     getRun,
+    listScreenshots,
+    getScreenshot,
     subscribe,
     whenSettled,
     close,
