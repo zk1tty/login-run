@@ -97,6 +97,7 @@ interface RunArtifactPaths {
 }
 
 const CUSTOMER_ID_PATTERN = /^[A-Za-z0-9._-]+$/;
+const DEFAULT_SESSION_API_PROCESS_KEEP_ALIVE_MS = 1800000;
 
 function toInt(value: unknown, fallback: number, minimum = 0): number {
   const parsed = Number(value);
@@ -254,6 +255,18 @@ function sanitizeProbeResult(result: LoginRunServiceResult): SanitizedLoginResul
   };
 }
 
+function finalStageFromResult(result: LoginRunServiceResult): unknown {
+  const workflow = asRecord(result.workflow);
+  const capture = asRecord(result.capture);
+  if (asRecord(workflow.finalStage).state !== undefined) {
+    return workflow.finalStage;
+  }
+  if (asRecord(workflow.postActionStage).state !== undefined) {
+    return workflow.postActionStage;
+  }
+  return capture.stage;
+}
+
 function buildCheckpointFromResult(result: LoginRunServiceResult) {
   return buildProbeCheckpoint({
     phase: result.phase,
@@ -262,7 +275,7 @@ function buildCheckpointFromResult(result: LoginRunServiceResult) {
     pageTitle: result.pageTitle,
     detachedAt: result.detachedAt,
     observed: asRecord((result as UnknownRecord).observed),
-    stage: result.capture && asRecord(result.capture).stage,
+    stage: finalStageFromResult(result),
     session: result.session,
     runDir: '',
   });
@@ -301,7 +314,9 @@ export function createLoginRunService(options: LoginRunServiceOptions = {}): Log
   const actionWaitMs = options.actionWaitMs || process.env.LOGIN_WORKFLOW_ACTION_WAIT_MS || 5000;
   const ttlMs = options.ttlMs || process.env.SESSION_API_TTL_MS;
   const processKeepAliveMs =
-    options.processKeepAliveMs || process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS;
+    options.processKeepAliveMs ||
+    process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS ||
+    DEFAULT_SESSION_API_PROCESS_KEEP_ALIVE_MS;
   const logsRoot = path.resolve(options.logsRoot || process.env.RUN_LOGS_ROOT || '.log');
 
   function createRunArtifacts(run: LoginRun): RunArtifactPaths {

@@ -10,6 +10,9 @@ const { createLoginRunService } = require('../src/core/run/login-run-service');
 function createProbeResult(input = {}) {
   const state = input.state || 'authed';
   const terminalOutcome = input.terminalOutcome || (state === 'authed' ? 'authed' : '');
+  const captureState = input.captureState || state;
+  const captureSelector = input.captureSelector;
+  const finalSelector = input.finalSelector || input.selector;
   return {
     phase: input.phase || 'bootstrap',
     targetUrl: input.targetUrl || 'https://example.com/login',
@@ -25,9 +28,10 @@ function createProbeResult(input = {}) {
     },
     capture: {
       stage: {
-        state,
-        phase: state === 'authed' ? 'authenticated' : 'credential',
-        reason: `${state} fixture`,
+        state: captureState,
+        phase: captureState === 'authed' ? 'authenticated' : 'credential',
+        reason: `${captureState} fixture`,
+        ...(captureSelector ? { selector: captureSelector } : {}),
       },
     },
     workflow: {
@@ -36,6 +40,7 @@ function createProbeResult(input = {}) {
         state,
         phase: state === 'authed' ? 'authenticated' : 'credential',
         reason: `${state} fixture`,
+        ...(finalSelector ? { selector: finalSelector } : {}),
       },
     },
     session: {
@@ -454,6 +459,9 @@ test('POST /v1/logins/:runId/otp resumes the stored checkpoint', async () => {
       return createProbeResult({
         state: 'otp_code',
         terminalOutcome: 'need_otp',
+        captureState: 'identifier',
+        captureSelector: '#username',
+        finalSelector: '#otpCode',
       });
     },
     input => createProbeResult({
@@ -501,6 +509,44 @@ test('POST /v1/logins/:runId/otp resumes the stored checkpoint', async () => {
   assert.equal(probe.calls[1].artifactSequenceStart, 2);
   assert.equal(probe.calls[1].payload.OTP_CODE, '123456');
   assert.equal(probe.calls[1].checkpoint.session.id, 'session-1');
+  assert.equal(probe.calls[1].checkpoint.stage.state, 'otp_code');
+  assert.equal(probe.calls[1].checkpoint.stage.selector, '#otpCode');
+
+  await app.close();
+});
+
+test('API login runs default to a Browserless process keep-alive', async () => {
+  const previousProcessKeepAlive = process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS;
+  delete process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS;
+  const probe = createFakeProbe(createProbeResult());
+  const app = buildApp({
+    logger: false,
+    probe,
+    idFactory: () => 'login_keepalive_default',
+    logsRoot: createTempLogRoot(),
+  });
+
+  try {
+    await app.inject({
+      method: 'POST',
+      url: '/v1/logins',
+      payload: {
+        customerId: 'danny',
+        targetUrl: 'https://example.com/login',
+        username: 'user@example.com',
+        password: 'secret',
+      },
+    });
+    await app.loginRunService.whenSettled('login_keepalive_default');
+
+    assert.equal(probe.calls[0].processKeepAliveMs, 1800000);
+  } finally {
+    if (previousProcessKeepAlive == null) {
+      delete process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS;
+    } else {
+      process.env.SESSION_API_PROCESS_KEEP_ALIVE_MS = previousProcessKeepAlive;
+    }
+  }
 
   await app.close();
 });

@@ -1,8 +1,10 @@
-# StayAuthed
+# Login Run
 
-StayAuthed is infrastructure for human and agents that need to use websites without first-class APIs.
+Login Run is infrastructure for human and agents that need to use websites without first-class APIs.
 
-Agents often need access to platforms where you do not own the end user's account. The user has to log in, pass CAPTCHA or OTP, and then the agent needs to keep working later without asking the user to repeat the same login flow. StayAuthed provides the remote browser session layer for that.
+Agents often need access to platforms where you do not own the end user's account. The user has to log in, pass CAPTCHA or OTP, and then the agent needs to keep working later without asking the user to repeat the same login flow. Login Run provides the remote browser session layer for that.
+
+Try it from [Demo site](https://stay-authed.onrender.com/demo)
 
 ## What It Solves
 
@@ -22,11 +24,11 @@ Browser agents are useful, but login management is still painful:
 - Browser-agent startups often optimize support for enterprise customers first.
 - Most agent workflows need user login, but teams usually rebuild that environment themselves.
 
-StayAuthed focuses on the common missing layer: getting a user logged in once and keeping the remote browser usable for future agent work.
+Login Run focuses on the common missing layer: getting a user logged in once and keeping the remote browser usable for future agent work.
 
 ## Real-world Proof
 
-StayAuthed has been tested against Cloudflare Turnstile behavior using the public test page:
+Login Run has been tested against Cloudflare Turnstile behavior using the public test page:
 
 ```text
 https://browser-compat.turnstile.workers.dev/
@@ -145,4 +147,4 @@ npm test
 
 ## Direction
 
-Next, StayAuthed will add sandbox code-mode adaptation: natural-language workflow requests generate and run site-specific workflow code in a cloud container while users can observe outcomes without manually implementing or testing every browser step.
+Next, Login Run will add sandbox code-mode adaptation: natural-language workflow requests generate and run site-specific workflow code in a cloud container while users can observe outcomes without manually implementing or testing every browser step.
