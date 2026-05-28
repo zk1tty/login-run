@@ -6,6 +6,8 @@ Agents often need access to platforms where you do not own the end user's accoun
 
 Try it from [Demo site](https://stay-authed.onrender.com/demo)
 
+![Login Run demo](docs/LoginRun-demo-20s/LoginRun-demo-20s.gif)
+
 ## What It Solves
 
 - Forward user login into a remote browser.
