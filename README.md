@@ -19,35 +19,6 @@ Login Run has two parts:
 
 The API keeps authentication/session management separate from agent logic. Codegen helps teams add new websites without manually scripting every login flow.
 
-## Real-world Proof
-
-Login Run has been tested against Cloudflare Turnstile behavior using the public test page:
-
-```text
-https://browser-compat.turnstile.workers.dev/
-```
-
-The run below is generated from real captured screenshots:
-
-![Cloudflare Turnstile auto-mode frames](docs/research/turnstile/assets/cloudflare-turnstile-auto-mode-frames.gif)
-
-It has also completed a real HealthEquity-style login workflow against:
-
-```text
-https://my.healthequity.com/ClientLogin.aspx
-```
-
-The animation below was generated from all screenshots in one captured run:
-
-![HealthEquity login workflow](docs/research/login/assets/healthequity-login-run-animated.png)
-
-Observed result from a captured run:
-
-- terminal outcome: `authed`
-- workflow duration: about 108 seconds
-- flow: username -> password -> OTP delivery selection -> OTP code -> authenticated page
-- Cloudflare/CAPTCHA signals were observed during the run through Browserless and DOM events
-
 ## Current API
 
 The server exposes a small async login API.
@@ -106,13 +77,27 @@ npx @loginrun/codegen demo
 
 It generates a redacted HealthEquity-style onboarding profile, fixture artifacts, regression test, and report under `./loginrun/healthequity`. The demo does not submit credentials, request OTP, call LoginRun APIs, or require Browserless configuration.
 
-## Tech Stack
+## Proof of CAPTCHA resolver
 
-- Fastify API server
-- Puppeteer over Browserless Session API
-- Browserless persistent sessions and proxy profiles
-- Deterministic DOM inventory, stage classification, action planning, and action execution
-- Gmail OTP helper for development and testing
+Login Run has been tested against Cloudflare Turnstile behavior using the public test page:
+
+```text
+https://browser-compat.turnstile.workers.dev/
+```
+
+The run below is generated from real captured screenshots:
+
+![Cloudflare Turnstile auto-mode frames](docs/research/turnstile/assets/cloudflare-turnstile-auto-mode-frames.gif)
+
+It has also completed a real HealthEquity-style login workflow against:
+
+```text
+https://my.healthequity.com/ClientLogin.aspx
+```
+
+The animation below was generated from all screenshots in one captured run:
+
+![HealthEquity login workflow](docs/research/login/assets/healthequity-login-run-animated.png)
 
 ## Setup
 
@@ -140,15 +125,3 @@ npm run otp:gmail:init
 npm run otp:gmail:watcher
 npm test
 ```
-
-## Docs
-
-- `docs/design/project-overview.md`
-- `docs/design/puppeteer-login-api.md`
-- `docs/design/login-workflow.md`
-- `docs/design/loginrun-codegen.md`
-- `docs/research/`
-
-## Direction
-
-Next, Login Run will add sandbox code-mode adaptation: natural-language workflow requests generate and run site-specific workflow code in a cloud container while users can observe outcomes without manually implementing or testing every browser step.
