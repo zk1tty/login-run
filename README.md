@@ -10,25 +10,14 @@ Try it from [Demo site](https://stay-authed.onrender.com/demo)
   <img src="docs/LoginRun-demo-20s/LoginRun-demo-20s.gif" alt="Login Run demo" width="100%">
 </a>
 
-## What It Solves
+## What It Provides
 
-- Forward user login into a remote browser.
-- Keep the browser session authenticated after the first login.
-- Let agents reconnect to the authenticated session and run repeatable workflows.
-- Avoid lock-in to one browser-agent provider by keeping the login/session layer separate.
+Login Run has two parts:
 
-This is not the agent itself. It is the authentication and browser-session infrastructure that lets you choose or generate agents on top.
+1. **LoginRun API** — a minimal API for logging into anti-bot-heavy web portals, handling CAPTCHA/OTP checkpoints, and maintaining authenticated browser session state for repeat agent workflows.
+2. **LoginRun Codegen** — a ReAct-style onboarding loop that generates site profiles and regression fixtures for deterministic browser automation, then validates them locally before they are promoted into API-backed workflows.
 
-## Why This Exists
-
-Browser agents are useful, but login management is still painful:
-
-- CAPTCHA, proxies, and session persistence are not consistently supported by agent providers.
-- Quick experiments require too much setup.
-- Browser-agent startups often optimize support for enterprise customers first.
-- Most agent workflows need user login, but teams usually rebuild that environment themselves.
-
-Login Run focuses on the common missing layer: getting a user logged in once and keeping the remote browser usable for future agent work.
+The API keeps authentication/session management separate from agent logic. Codegen helps teams add new websites without manually scripting every login flow.
 
 ## Real-world Proof
 
@@ -107,6 +96,16 @@ GET /v1/logins/:runId/events
 
 Polling is the source of truth; SSE is for frontend completion callbacks.
 
+## LoginRun Codegen
+
+Try the standalone Codegen demo without cloning this repo:
+
+```bash
+npx @loginrun/codegen demo
+```
+
+It generates a redacted HealthEquity-style onboarding profile, fixture artifacts, regression test, and report under `./loginrun/healthequity`. The demo does not submit credentials, request OTP, call LoginRun APIs, or require Browserless configuration.
+
 ## Tech Stack
 
 - Fastify API server
@@ -147,6 +146,7 @@ npm test
 - `docs/design/project-overview.md`
 - `docs/design/puppeteer-login-api.md`
 - `docs/design/login-workflow.md`
+- `docs/design/loginrun-codegen.md`
 - `docs/research/`
 
 ## Direction
