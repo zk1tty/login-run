@@ -1,8 +1,8 @@
 # Login Run 🏃🏻‍♀️
 
-Login Run is minimal API server for human and agents that need to retrieve/input data from websites without APIs.
+Login Run is a minimal API for turning one-time human login into reusable, authenticated browser sessions for agents.
 
-Agents often need access to platforms where you do not own the end user's account. The user has to log in, pass CAPTCHA or OTP, and then the agent needs to keep working later **without asking the user to repeat the same login flow**. Login Run provides the remote browser session layer for that.
+Many workflows still depend on portals without APIs, where the agent needs to read or update data inside an end user's account. The user has to log in, pass CAPTCHA or OTP, and then the agent needs to keep working later **without asking the user to repeat the same login flow**. Login Run provides the remote browser session layer for that.
 
 Try it from [Demo site](https://stay-authed.onrender.com/demo)
 
