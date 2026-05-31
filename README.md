@@ -10,7 +10,7 @@ Try it from [Demo site](https://stay-authed.onrender.com/demo)
 
 > [!TIP]
 > **Result:** HealthEquity login became **3x faster** than using browser agent on runtime — from **85 seconds** to **24 seconds**.
-> So clients can integrate this workflow synchronously, and launch the product!
+> So you can integrate this workflow synchronously to your frontend or chatbot via tool call, and launch the product!
 
 <a href="https://www.youtube.com/watch?v=nSqYzkXConc">
   <img src="docs/LoginRun-demo-20s/LoginRun-demo-20s.gif" alt="Login Run demo" width="100%">
