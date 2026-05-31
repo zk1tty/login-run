@@ -10,6 +10,9 @@ Try it from [Demo site](https://stay-authed.onrender.com/demo)
   <img src="docs/LoginRun-demo-20s/LoginRun-demo-20s.gif" alt="Login Run demo" width="100%">
 </a>
 
+> [!TIP]
+> **Result:** HealthEquity login is now **3x faster** — from **85 seconds** to **24 seconds**.
+
 ## What It Provides
 
 Login Run has two parts:
