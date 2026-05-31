@@ -12,6 +12,7 @@ Try it from [Demo site](https://stay-authed.onrender.com/demo)
 
 > [!TIP]
 > **Result:** HealthEquity login is now **3x faster** — from **85 seconds** to **24 seconds**.
+> So clients can integrate this workflow synchronously, and launch the product!
 
 ## What It Provides
 
