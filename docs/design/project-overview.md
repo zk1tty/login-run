@@ -59,6 +59,23 @@ POST /v1/logins/:runId/otp
 
 The login engine uses deterministic page inventory, stage classification, action planning, and browser action execution rather than prompt-driven browser control.
 
+
+Simplified core control DAG:
+
+```mermaid
+flowchart TB
+    A["Browser Runtime"] --> B["Runtime Inventory"]
+    B --> E["Candidate Identifier"]
+    E --> G["Page / Stage Classifier"]
+    G --> H["State Machine"]
+    H --> I{"Terminal?"}
+    I -- yes --> J["Workflow Result"]
+    I -- no --> K["Action Planner"]
+    K --> L["Action Executor"]
+    L --> M["Page Stability / Redirect Wait"]
+    M --> B
+```
+
 ## Product Principle
 
 StayAuthed should stay infrastructure-first:

@@ -29,6 +29,24 @@ collect page inventory
   -> reclassify
 ```
 
+Simplified core control DAG:
+
+```mermaid
+flowchart TB
+    A["Browser Runtime"] --> B["Runtime Inventory"]
+    B --> E["Candidate Identifier"]
+    E --> G["Page / Stage Classifier"]
+    G --> H["State Machine"]
+    H --> I{"Terminal?"}
+    I -- yes --> J["Workflow Result"]
+    I -- no --> K["Action Planner"]
+    K --> L["Action Executor"]
+    L --> M["Page Stability / Redirect Wait"]
+    M --> B
+```
+
+This DAG is the main browser-runtime control path. Candidate identification means selecting the current page's actionable login candidates from observed page facts; richer static inventory, candidate scoring evidence, screenshots, and artifact export can support the loop, but they should not bypass the state machine or become required control edges.
+
 The parts must stay separate:
 
 - Page classification decides what kind of page is currently visible.
