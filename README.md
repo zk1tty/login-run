@@ -2,7 +2,7 @@
 
 Login Run is a minimal API for turning one-time human login into reusable, authenticated browser sessions for agents.
 
-Many workflows still depend on portals without APIs, where the agent needs to read or update data inside an end user's account. The user has to log in, pass CAPTCHA and OTP(one time passcode), and then the agent needs to keep working later **without asking the user to repeat the same login flow**. 
+Many workflows still depend on portals without APIs, where the agent needs to read or update data inside an end user's account. The user has to log in, pass CAPTCHA and OTP(one time passcode), and then the agent needs to keep working later **without asking the user to repeat the same login flow**.    
 
 Login Run provides the remote browser session layer for that.
 
