@@ -2,18 +2,19 @@
 
 Login Run is a minimal API for turning one-time human login into reusable, authenticated browser sessions for agents.
 
-Many workflows still depend on portals without APIs, where the agent needs to read or update data inside an end user's account. The user has to log in, pass CAPTCHA or OTP, and then the agent needs to keep working later **without asking the user to repeat the same login flow**. Login Run provides the remote browser session layer for that.
+Many workflows still depend on portals without APIs, where the agent needs to read or update data inside an end user's account. The user has to log in, pass CAPTCHA and OTP(one time passcode), and then the agent needs to keep working later **without asking the user to repeat the same login flow**. 
+
+Login Run provides the remote browser session layer for that.
 
 Try it from [Demo site](https://stay-authed.onrender.com/demo)
-
-<a href="https://www.youtube.com/watch?v=nSqYzkXConc">
-  <img src="docs/LoginRun-demo-20s/LoginRun-demo-20s.gif" alt="Login Run demo" width="100%">
-</a>
 
 > [!TIP]
 > **Result:** HealthEquity login is now **3x faster** — from **85 seconds** to **24 seconds**.
 > So clients can integrate this workflow synchronously, and launch the product!
 
+<a href="https://www.youtube.com/watch?v=nSqYzkXConc">
+  <img src="docs/LoginRun-demo-20s/LoginRun-demo-20s.gif" alt="Login Run demo" width="100%">
+</a>
 ## What It Provides
 
 Login Run has two parts:
