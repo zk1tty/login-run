@@ -9,12 +9,14 @@ Login Run provides the remote browser session layer for that.
 Try it from [Demo site](https://stay-authed.onrender.com/demo)
 
 > [!TIP]
-> **Result:** HealthEquity login is now **3x faster** — from **85 seconds** to **24 seconds**.
+> **Result:** HealthEquity login became **3x faster** than using browser agent on runtime — from **85 seconds** to **24 seconds**.
 > So clients can integrate this workflow synchronously, and launch the product!
 
 <a href="https://www.youtube.com/watch?v=nSqYzkXConc">
   <img src="docs/LoginRun-demo-20s/LoginRun-demo-20s.gif" alt="Login Run demo" width="100%">
 </a>
+
+
 ## What It Provides
 
 Login Run has two parts:
