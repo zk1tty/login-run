@@ -22,7 +22,7 @@ Try it from [Demo site](https://stay-authed.onrender.com/demo)
 Login Run has two parts:
 
 1. **LoginRun API** — a minimal API for logging into anti-bot-heavy web portals, handling CAPTCHA/OTP checkpoints, and maintaining authenticated browser session state for repeat agent workflows.
-2. **LoginRun Codegen** — a ReAct-style onboarding loop that generates site profiles and regression fixtures for deterministic browser automation, then validates them locally before they are promoted into API-backed workflows.
+2. **LoginRun Codegen** — a ReAct-style agent loop that generates and validate deterministic browser automation scripts.
 
 The API keeps authentication/session management separate from agent logic. Codegen helps teams add new websites without manually scripting every login flow.
 
