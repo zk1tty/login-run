@@ -1,0 +1,48 @@
+{
+  "siteId": "healthequity",
+  "mode": "mock",
+  "discovery": {
+    "status": "ready",
+    "stage": {
+      "state": "identifier",
+      "phase": "credential",
+      "reason": "Visible enabled username-like input detected."
+    },
+    "selectedIdentifier": {
+      "semanticRole": "identifier",
+      "selector": "#ctl00_modulePageContent_txtUserIdStandard",
+      "confidence": 0.94,
+      "evidence": [
+        "associated label includes username",
+        "autocomplete=username",
+        "visible enabled text input",
+        "inside login form context"
+      ],
+      "penalties": []
+    },
+    "selectedSubmit": {
+      "semanticRole": "primary_submit",
+      "selector": "#ctl00_modulePageContent_btnSubmitUsername",
+      "confidence": 0.91,
+      "evidence": [
+        "button text includes continue",
+        "visible enabled submit-like control",
+        "follows selected identifier in DOM order"
+      ],
+      "penalties": []
+    },
+    "rejectedCandidates": [
+      {
+        "selector": "a[href*='Forgot']",
+        "semanticRole": "help_or_recovery",
+        "confidence": 0.17,
+        "evidence": [
+          "text includes forgot"
+        ],
+        "penalties": [
+          "account recovery action is not a login submit"
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "name": "@loginrun/codegen",
+  "version": "0.1.0",
+  "description": "Standalone LoginRun Codegen demo CLI.",
+  "type": "commonjs",
+  "bin": {
+    "loginrun-codegen": "bin/loginrun-codegen.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "fixtures",
+    "templates",
+    "README.md"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

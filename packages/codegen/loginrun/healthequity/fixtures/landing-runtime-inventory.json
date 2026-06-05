@@ -1,0 +1,65 @@
+{
+  "title": "Client Login",
+  "url": "https://my.healthequity.com/ClientLogin.aspx",
+  "text": "Log in to your account Username Continue Forgot username",
+  "activeSelector": "",
+  "formCount": 1,
+  "candidates": [
+    {
+      "index": 0,
+      "tag": "input",
+      "selector": "#ctl00_modulePageContent_txtUserIdStandard",
+      "type": "text",
+      "role": "",
+      "id": "ctl00_modulePageContent_txtUserIdStandard",
+      "name": "ctl00$modulePageContent$txtUserIdStandard",
+      "text": "",
+      "label": [
+        "Username"
+      ],
+      "placeholder": "Username",
+      "ariaLabel": "",
+      "autocomplete": "username",
+      "inputMode": "",
+      "options": [],
+      "disabled": false,
+      "visible": true,
+      "focusable": true,
+      "active": false,
+      "valueLength": 0,
+      "boundingBox": {
+        "x": 292,
+        "y": 328,
+        "width": 336,
+        "height": 44
+      }
+    },
+    {
+      "index": 1,
+      "tag": "input",
+      "selector": "#ctl00_modulePageContent_btnSubmitUsername",
+      "type": "submit",
+      "role": "",
+      "id": "ctl00_modulePageContent_btnSubmitUsername",
+      "name": "ctl00$modulePageContent$btnSubmitUsername",
+      "text": "Continue",
+      "label": [],
+      "placeholder": "",
+      "ariaLabel": "",
+      "autocomplete": "",
+      "inputMode": "",
+      "options": [],
+      "disabled": false,
+      "visible": true,
+      "focusable": true,
+      "active": false,
+      "valueLength": 8,
+      "boundingBox": {
+        "x": 292,
+        "y": 392,
+        "width": 336,
+        "height": 44
+      }
+    }
+  ]
+}

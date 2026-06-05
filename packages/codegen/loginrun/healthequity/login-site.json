@@ -1,0 +1,25 @@
+{
+  "siteId": "healthequity",
+  "loginUrl": "https://my.healthequity.com/ClientLogin.aspx",
+  "allowedHosts": [
+    "my.healthequity.com",
+    "member.my.healthequity.com"
+  ],
+  "credentials": {
+    "identifierKind": "username",
+    "usernameSecretKey": "LOGIN_USERNAME",
+    "passwordSecretKey": "LOGIN_PASSWORD"
+  },
+  "otp": {
+    "required": true,
+    "deliveryPreference": "email"
+  },
+  "authenticatedMarkers": {
+    "urlIncludes": [
+      "/Member/MemberHome.aspx"
+    ],
+    "titleIncludes": [
+      "Member Portal"
+    ]
+  }
+}
