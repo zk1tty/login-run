@@ -4,6 +4,21 @@ LoginRun Codegen is the onboarding layer for new login websites. Its job is to g
 
 The v1 demo is intentionally standalone. It runs from `npx`, writes local artifacts, and does not require cloning this repository, running the LoginRun API server, configuring Browserless, or providing credentials.
 
+## Architecture
+
+```mermaid
+flowchart TB
+    A["Browser Runtime"] --> B["Runtime Inventory"]
+    B --> E["Candidate Identifier"]
+    G["Page / Stage Classifier"] --> H["State Machine"]
+    H --> I{"Terminal?"}
+    I -- yes --> J["Workflow Result"]
+    I -- no --> K["Action Planner"]
+    K --> L["Action Executor"]
+    L --> M["Page Stability / Redirect Wait"]
+    M --> B
+```
+
 ## Standalone Demo
 
 ```bash
