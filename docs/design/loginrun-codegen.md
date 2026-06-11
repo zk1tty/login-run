@@ -6,7 +6,7 @@ The v1 demo is intentionally standalone. It runs from `npx`, writes local artifa
 
 ## Architecture
 
-![browser-runtime-loop](./browser-runtime-loop.svg)
+<img src="./browser-runtime-loop.svg" alt="browser-runtime-loop" width="50%">
 
 ## Standalone Demo
 
