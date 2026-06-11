@@ -6,18 +6,7 @@ The v1 demo is intentionally standalone. It runs from `npx`, writes local artifa
 
 ## Architecture
 
-```mermaid
-flowchart TB
-    A["Browser Runtime"] --> B["Runtime Inventory"]
-    B --> E["Candidate Identifier"]
-    G["Page / Stage Classifier"] --> H["State Machine"]
-    H --> I{"Terminal?"}
-    I -- yes --> J["Workflow Result"]
-    I -- no --> K["Action Planner"]
-    K --> L["Action Executor"]
-    L --> M["Page Stability / Redirect Wait"]
-    M --> B
-```
+![browser-runtime-loop](./browser-runtime-loop.svg)
 
 ## Standalone Demo
 
