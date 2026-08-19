@@ -16,6 +16,10 @@ Try it from [Demo site](https://stay-authed.onrender.com/demo)
   <img src="docs/LoginRun-demo-20s/LoginRun-demo-20s.gif" alt="Login Run demo" width="100%">
 </a>
 
+## Why?
+
+Most browser infrastructure companies don't guarantee that their agent can get through anti-bot gated portals. That's exactly the problem my friend's startup ran into, and it's the one I set out to solve.
+I tell the backstory in [this video](https://www.youtube.com/shorts/Y44glGGTGdg).
 
 ## What It Provides
 
