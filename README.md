@@ -1,3 +1,4 @@
+![LoginRun](assets/loginrun-run.gif)
 # Login Run 🏃🏻‍♀️
 
 Login Run is a minimal API for turning one-time human login into reusable, authenticated browser sessions for agents.
